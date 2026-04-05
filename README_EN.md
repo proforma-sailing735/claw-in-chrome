@@ -49,4 +49,4 @@ After that, click `保存并应用`, then close and reopen the side panel. Once 
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=S-Trespassing/--&type=date&legend=top-left)](https://www.star-history.com/#S-Trespassing/--&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=S-Trespassing/claw-in-chrome&type=date&legend=top-left)](https://www.star-history.com/#S-Trespassing/claw-in-chrome&type=date&legend=top-left)

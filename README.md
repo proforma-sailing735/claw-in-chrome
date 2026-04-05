@@ -22,6 +22,8 @@
 - 选择 `OpenAI Chat Completions` 或 `OpenAI Responses API`
 - 导出日志排查问题
 
+![侧边栏聊天界面](./docs/screenshots/03.png)
+
 ## 1. 安装
 
 1. 打开 `chrome://extensions/`
@@ -52,4 +54,4 @@
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=S-Trespassing/--&type=date&legend=top-left)](https://www.star-history.com/#S-Trespassing/--&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=S-Trespassing/claw-in-chrome&type=date&legend=top-left)](https://www.star-history.com/#S-Trespassing/claw-in-chrome&type=date&legend=top-left)
