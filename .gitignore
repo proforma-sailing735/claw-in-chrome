@@ -4,3 +4,8 @@ Thumbs.db
 .DS_Store
 /AstrBot-master
 /tmp
+功能报告.md
+架构图.txt
+/page-agent-main
+/mole-extension-main
+/node_modules

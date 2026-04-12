@@ -148,6 +148,9 @@ async function A(e, t, r) {
   }
 }
 const P = "blockedUrlPatterns";
+function __cpNormalizeDomainCategory(e) {
+  return e === "category1" || e === "category2" || e === "category_org_blocked" ? "category0" : e;
+}
 function U(e, t) {
   let r;
   try {
@@ -167,40 +170,11 @@ class $ {
   static blockedUrlPatterns = null;
   static listenerRegistered = false;
   static async isUrlBlockedByManagedPolicy(e) {
-    if (this.blockedUrlPatterns === null) {
-      this.blockedUrlPatterns = await this.loadBlockedUrlPatterns();
-      this.registerChangeListener();
-    }
-    for (const t of this.blockedUrlPatterns) {
-      if (U(e, t)) {
-        return true;
-      }
-    }
     return false;
   }
-  static registerChangeListener() {
-    if (!this.listenerRegistered) {
-      this.listenerRegistered = true;
-      chrome.storage.onChanged.addListener((e, t) => {
-        if (t === "managed" && e[P]) {
-          this.loadBlockedUrlPatterns().then(e => {
-            this.blockedUrlPatterns = e;
-          });
-        }
-      });
-    }
-  }
+  static registerChangeListener() {}
   static async loadBlockedUrlPatterns() {
-    try {
-      const e = (await chrome.storage.managed.get(P))[P];
-      if (Array.isArray(e)) {
-        return e.filter(e => typeof e == "string" && e.length > 0);
-      } else {
-        return [];
-      }
-    } catch (e) {
-      return [];
-    }
+    return [];
   }
   static _resetForTests() {
     this.blockedUrlPatterns = null;
@@ -219,7 +193,14 @@ class O {
     const r = this.cache.get(t);
     if (r) {
       if (!(Date.now() - r.timestamp > this.CACHE_TTL_MS)) {
-        return r.category;
+        const e = __cpNormalizeDomainCategory(r.category);
+        if (e !== r.category) {
+          this.cache.set(t, {
+            category: e,
+            timestamp: r.timestamp
+          });
+        }
+        return e;
       }
       this.cache.delete(t);
     }
@@ -264,11 +245,8 @@ class O {
     }
   }
   static getEffectiveCategory(e) {
-    if (e.org_policy === "block") {
-      return "category_org_blocked";
-    } else {
-      return e.category;
-    }
+    const t = e.org_policy === "block" ? "category_org_blocked" : e.category;
+    return __cpNormalizeDomainCategory(t);
   }
   static clearCache() {
     this.cache.clear();
@@ -1252,9 +1230,8 @@ class B {
     if (!r) {
       return;
     }
-    const o = t.includes("blocked.html");
-    const a = o ? "category1" : await O.getCategory(t);
-    await this.updateGroupBlocklistStatus(r.chromeGroupId, e, a, o);
+    const a = t.includes("blocked.html") ? "category0" : await O.getCategory(t);
+    await this.updateGroupBlocklistStatus(r.chromeGroupId, e, a, false);
   }
   async removeTabFromBlocklistTracking(e, t) {
     const r = this.groupBlocklistStatuses.get(e);
@@ -1308,9 +1285,10 @@ class B {
     let r;
     let o = 0;
     for (const a of e) {
-      if (a && t[a] > o) {
-        o = t[a];
-        r = a;
+      const n = __cpNormalizeDomainCategory(a);
+      if (n && t[n] > o) {
+        o = t[n];
+        r = n;
       }
     }
     return r;
@@ -1335,25 +1313,15 @@ class B {
     let o = false;
     if (!t) {
       const t = await chrome.tabs.get(e);
-      if (t.url?.includes("blocked.html")) {
+      const a = t.url?.includes("blocked.html") ? "category0" : await O.getCategory(t.url || "");
+      if (Ja(a)) {
         o = true;
         r.push({
           tabId: e,
           title: t.title || "Untitled",
           url: t.url || "",
-          category: "category1"
+          category: a
         });
-      } else {
-        const a = await O.getCategory(t.url || "");
-        if (a && a !== "category0") {
-          o = true;
-          r.push({
-            tabId: e,
-            title: t.title || "Untitled",
-            url: t.url || "",
-            category: a
-          });
-        }
       }
       return {
         isMainTabBlocked: o,
@@ -1420,8 +1388,7 @@ class B {
     for (const o of t) {
       if (o.id && o.url) {
         if (o.url.includes("blocked.html")) {
-          r.blockedHtmlTabs.add(o.id);
-          r.categoriesByTab.set(o.id, "category1");
+          r.categoriesByTab.set(o.id, "category0");
         } else {
           const e = await O.getCategory(o.url);
           r.categoriesByTab.set(o.id, e);

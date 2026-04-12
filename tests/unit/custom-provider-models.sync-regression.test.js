@@ -3,7 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const modelsPath = path.join(__dirname, "..", "custom-provider-models.js");
+const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
+const modelsPath = path.join(__dirname, "..", "..", "custom-provider-models.js");
+const contractSource = fs.readFileSync(contractPath, "utf8");
 const modelsSource = fs.readFileSync(modelsPath, "utf8");
 
 function createProfile(overrides = {}) {
@@ -105,7 +107,7 @@ function createStorageArea(initialState) {
   };
 }
 
-function loadModels(storageArea) {
+function loadModels(storageArea, overrides = {}) {
   const sandbox = {
     console,
     AbortController,
@@ -118,9 +120,13 @@ function loadModels(storageArea) {
       storage: {
         local: storageArea
       }
-    }
+    },
+    ...overrides
   };
   sandbox.globalThis = sandbox;
+  vm.runInNewContext(contractSource, sandbox, {
+    filename: "claw-contract.js"
+  });
   vm.runInNewContext(modelsSource, sandbox, {
     filename: "custom-provider-models.js"
   });
@@ -308,6 +314,182 @@ async function testLoadingLegacyStorageCleansDeprecatedFields() {
   assert.equal(Object.prototype.hasOwnProperty.call(storageArea.state.customProviderProfiles[0], "notes"), false);
 }
 
+async function testManualAliasOnlyChangesDisplayName() {
+  const activeProfile = createProfile({
+    defaultModel: "MiniMax-M2.7",
+    fastModel: "MiniMax-M2.7-fast",
+    fetchedModels: [{
+      value: "MiniMax-M2.7",
+      label: "MiniMax M2.7 正式版",
+      manual: true
+    }, {
+      value: "MiniMax-M2.7-fast",
+      label: "MiniMax M2.7 快速版",
+      manual: true
+    }]
+  });
+  const storageArea = createStorageArea({
+    customProviderProfiles: [activeProfile],
+    customProviderActiveProfileId: activeProfile.id,
+    customProviderConfig: projectProfileToConfig(activeProfile),
+    selectedModel: "stale-model-id",
+    selectedModelQuickMode: "stale-fast-model-id"
+  });
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await models.saveProviderProfile(activeProfile, {
+    profileId: activeProfile.id,
+    storageArea
+  });
+
+  assert.equal(storageArea.state.selectedModel, "MiniMax-M2.7");
+  assert.equal(storageArea.state.selectedModelQuickMode, "MiniMax-M2.7-fast");
+  assert.equal(storageArea.state.customProviderConfig.defaultModel, "MiniMax-M2.7");
+  assert.equal(storageArea.state.customProviderConfig.fetchedModels.find((item) => item.value === "MiniMax-M2.7")?.label, "MiniMax M2.7 正式版");
+}
+
+async function testSyncModelOptionsUsesAliasButKeepsModelIdValue() {
+  const storageArea = createStorageArea({});
+  const select = {
+    children: [],
+    disabled: false,
+    value: ""
+  };
+  Object.defineProperty(select, "innerHTML", {
+    get() {
+      return "";
+    },
+    set() {
+      this.children = [];
+    }
+  });
+  select.appendChild = function (child) {
+    this.children.push(child);
+  };
+  const models = loadModels(storageArea, {
+    document: {
+      createElement() {
+        return {
+          value: "",
+          textContent: "",
+          dataset: {}
+        };
+      }
+    }
+  });
+
+  models.syncModelOptions(select, [{
+    value: "MiniMax-M2.7",
+    label: "MiniMax M2.7 正式版",
+    manual: true
+  }], "MiniMax-M2.7");
+
+  assert.equal(select.children[1].textContent, "MiniMax M2.7 正式版");
+  assert.equal(select.children[1].value, "MiniMax-M2.7");
+  assert.equal(select.value, "MiniMax-M2.7");
+}
+async function testSavingHttpProfileRequiresExplicitToggle() {
+  const httpProfile = createProfile({
+    baseUrl: "http://provider-a.example/v1"
+  });
+  const storageArea = createStorageArea({
+    customProviderProfiles: [],
+    customProviderConfig: {}
+  });
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await assert.rejects(models.saveProviderProfile(httpProfile, {
+    profileId: httpProfile.id,
+    storageArea
+  }), /HTTP Base URL 未启用/);
+
+  assert.equal(storageArea.state.customProviderProfiles?.length || 0, 0);
+}
+async function testSavingHttpProfileSucceedsWhenToggleEnabled() {
+  const httpProfile = createProfile({
+    baseUrl: "http://provider-a.example/v1"
+  });
+  const storageArea = createStorageArea({
+    customProviderAllowHttp: true,
+    customProviderAllowHttpMigrated: true
+  });
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await models.saveProviderProfile(httpProfile, {
+    profileId: httpProfile.id,
+    storageArea
+  });
+
+  assert.equal(storageArea.state.customProviderConfig.baseUrl, "http://provider-a.example/v1");
+  assert.equal(storageArea.state.customProviderProfiles[0].baseUrl, "http://provider-a.example/v1");
+}
+async function testActivatingHttpProfileRequiresExplicitToggle() {
+  const activeProfile = createProfile();
+  const httpProfile = createProfile({
+    id: "provider_http",
+    name: "HTTP Provider",
+    baseUrl: "http://provider-http.example/v1",
+    apiKey: "key-http",
+    defaultModel: "gpt-4.1",
+    fastModel: "gpt-4.1-mini"
+  });
+  const storageArea = createStorageArea({
+    customProviderProfiles: [activeProfile, httpProfile],
+    customProviderActiveProfileId: activeProfile.id,
+    customProviderConfig: projectProfileToConfig(activeProfile)
+  });
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await assert.rejects(models.setActiveProviderProfile(httpProfile.id, {
+    storageArea
+  }), /HTTP Base URL 未启用/);
+
+  assert.equal(storageArea.state.customProviderActiveProfileId, activeProfile.id);
+}
+async function testFetchAndProbeRejectDisabledHttpBeforeNetwork() {
+  const httpProfile = createProfile({
+    baseUrl: "http://provider-a.example/v1"
+  });
+  const storageArea = createStorageArea({});
+  let fetchCalls = 0;
+  const fetchImpl = async () => {
+    fetchCalls += 1;
+    throw new Error("fetch should not be called");
+  };
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await assert.rejects(models.fetchProviderModels(httpProfile, {
+    storageArea,
+    fetchImpl
+  }), /HTTP Base URL 未启用/);
+  await assert.rejects(models.probeProviderModel(httpProfile, {
+    storageArea,
+    fetchImpl
+  }), /HTTP Base URL 未启用/);
+  assert.equal(fetchCalls, 0);
+}
+async function testLegacyActiveHttpProfileMigratesToggleToEnabled() {
+  const httpProfile = createProfile({
+    baseUrl: "http://provider-a.example/v1"
+  });
+  const storageArea = createStorageArea({
+    customProviderProfiles: [httpProfile],
+    customProviderActiveProfileId: httpProfile.id,
+    customProviderConfig: projectProfileToConfig(httpProfile)
+  });
+
+  loadModels(storageArea);
+  await waitForMicrotasks();
+
+  assert.equal(storageArea.state.customProviderAllowHttp, true);
+  assert.equal(storageArea.state.customProviderAllowHttpMigrated, true);
+}
+
 async function main() {
   await testSavingActiveProfileSyncsSelectedModels();
   await testSavingNonModelFieldsKeepsExistingStickySelection();
@@ -315,6 +497,13 @@ async function main() {
   await testActivatingAnotherProfileSyncsSelectedModels();
   await testReconcileRepairsExistingStaleSelectionWithoutResave();
   await testLoadingLegacyStorageCleansDeprecatedFields();
+  await testManualAliasOnlyChangesDisplayName();
+  await testSyncModelOptionsUsesAliasButKeepsModelIdValue();
+  await testSavingHttpProfileRequiresExplicitToggle();
+  await testSavingHttpProfileSucceedsWhenToggleEnabled();
+  await testActivatingHttpProfileRequiresExplicitToggle();
+  await testFetchAndProbeRejectDisabledHttpBeforeNetwork();
+  await testLegacyActiveHttpProfileMigratesToggleToEnabled();
   console.log("custom-provider-models sync regression tests passed");
 }
 

@@ -35,7 +35,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https: http: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
   },
   "description": "Claw",
   "externally_connectable": {
@@ -68,9 +68,6 @@
     "unlimitedStorage",
     "downloads"
   ],
-  "storage": {
-    "managed_schema": "managed_schema.json"
-  },
   "version": "1.0.66.1",
   "web_accessible_resources": [
     {

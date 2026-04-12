@@ -87467,52 +87467,100 @@ async function lQ(e, t) {
     return "";
   }
 }
-async function cQ(e, t) {
+async function cQ(e, t, n = {}) {
+  const s = __cpExtractSessionDisplayText(e?.content, __CP_CHAT_SESSION_TEXT_LIMIT);
+  const r = __cpBuildTaskStyleGroupTitleFallback(s, n);
   try {
-    const s = typeof (n = e).content == "string" ? n.content : Array.isArray(n.content) ? n.content.filter(e => "type" in e && e.type === "text").map(e => "text" in e ? e.text : "").join("\n") : "";
     if (!s || s.trim() === "") {
-      return "";
+      return r;
     }
-    const r = function (e) {
-      return `<conversation>\n\n${e}\n\n</conversation>\n\nThink about it, then suggest a title based on the first message, putting it between <title> tags.`;
-    }(s);
-    const i = [{
+    const i = __cpBuildTaskStyleGroupTitlePrompt(s, n);
+    const o = [{
       role: "user",
-      content: r
+      content: i
     }];
-    i.push({
+    o.push({
       role: "assistant",
-      content: "Here is a clear, concise title for this browser automation conversation:\n\n<title>"
+      content: "Here is a concise task-style title for this browser tab group:\n\n<title>"
     });
-    return function (e) {
-      const t = e => {
-        const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-        return t && t.toLowerCase() !== "title" ? t : "";
-      };
+    const a = function (e) {
       if (!e.content || e.content.length === 0) {
         return "";
       }
-      const n = e.content.filter(e => e.type === "text").map(e => "text" in e ? e.text : "").join("\n");
-      const s = n.match(/<title>([\s\S]*?)<\/title>/i);
+      const t = e.content.filter(e => e.type === "text").map(e => "text" in e ? e.text : "").join("\n");
+      const n = t.match(/<title>([\s\S]*?)<\/title>/i);
+      if (n) {
+        return __cpNormalizeGeneratedGroupTitle(n[1]);
+      }
+      const s = t.match(/^([\s\S]*?)<\/title>/i);
       if (s) {
-        return t(s[1]);
+        return __cpNormalizeGeneratedGroupTitle(s[1]);
       }
-      const r = n.match(/^([\s\S]*?)<\/title>/i);
-      if (r) {
-        return t(r[1]);
-      }
-      const i = n.match(/<title>([\s\S]*)$/i);
-      return i ? t(i[1]) : "";
+      const r = t.match(/<title>([\s\S]*)$/i);
+      return r ? __cpNormalizeGeneratedGroupTitle(r[1]) : __cpNormalizeGeneratedGroupTitle(t);
     }(await t({
       maxTokens: 128,
-      messages: i,
-      system: "Act as an accurate and concise title generator for browser automation conversations.\nGenerate a <title> based on the first message in the conversation.\n\nBasic tips:\n- Focus on the main browser task or action being requested\n- Identify the key website, action, or goal from the message\n- The conversation is a request to an AI assistant for browser automation. Avoid using \"Help\", \"Assistance\", \"Request\" in the title.\n- Be informative and specific to create a unique, distinctive title\n- Keep it short and concise - typically 2-4 words\n- Start with the most identifying/important word first\n- Think like an editor - what will be most compelling and informative for identifying this conversation\n- If you are unsure what the task is about, just create an empty <title></title>\n\nExamples of good titles for browser automation tasks:\n- <title>Draft email response</title>\n- <title>Grocery shopping</title>\n- <title>Paris flight search</title>",
+      messages: o,
+      system: "Act as an accurate and concise tab-group title generator for browser automation tasks.\nGenerate a <title> that reads like the active task label for a browser agent.\n\nPriority order:\n1. Use the user's request as the primary signal.\n2. Use the current site, page title, and open tabs only to sharpen the task.\n3. Prefer a task label over a conversation summary.\n\nRequirements:\n- Use the same language as the user's request when clear\n- 2-5 words, ideally under 42 characters\n- Sound like a live task name, not a sentence\n- Avoid generic words like Help, Assistance, Request, Browser Automation, Chat, Session, Task\n- Include a site or product name only when it helps identify the task\n- Prefer strong nouns and verbs over filler words\n- If uncertain, return an empty <title></title>\n\nExamples:\n- <title>Gmail Draft Reply</title>\n- <title>Amazon Price Check</title>\n- <title>TripAdvisor Hotel Search</title>\n- <title>整理飞书日报</title>\n- <title>查询快递进度</title>",
       modelClass: "small_fast"
     }));
-  } catch (s) {
+    return a || r;
+  } catch (i) {
+    return r;
+  }
+}
+function __cpEscapeXmlText(e) {
+  return String(e || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function __cpNormalizeGroupTitleContext(e = {}) {
+  return {
+    currentDomain: __cpNormalizeSessionDomain(e.currentDomain || e.domain),
+    currentUrl: __cpNormalizeSessionUrl(e.currentUrl || e.url),
+    tabTitle: __cpNormalizeSessionLabel(e.tabTitle || e.title, 120),
+    availableTabs: (Array.isArray(e.availableTabs) ? e.availableTabs : []).slice(0, 5).map(e => ({
+      title: __cpNormalizeSessionLabel(e?.title, 80),
+      url: __cpNormalizeSessionUrl(e?.url),
+      domain: __cpNormalizeSessionDomain(e?.url || e?.domain)
+    })).filter(e => e.title || e.url || e.domain)
+  };
+}
+function __cpBuildTaskStyleGroupTitlePrompt(e, t = {}) {
+  const n = __cpNormalizeGroupTitleContext(t);
+  const s = n.availableTabs.length > 0 ? `\n<open_tabs>\n${n.availableTabs.map((e, t) => `  <tab index="${t + 1}">\n    <title>${__cpEscapeXmlText(e.title)}</title>\n    <domain>${__cpEscapeXmlText(e.domain)}</domain>\n    <url>${__cpEscapeXmlText(e.url)}</url>\n  </tab>`).join("\n")}\n</open_tabs>` : "";
+  return `<task_request>\n${__cpEscapeXmlText(e)}\n</task_request>\n\n<context>\n<current_domain>${__cpEscapeXmlText(n.currentDomain)}</current_domain>\n<page_title>${__cpEscapeXmlText(n.tabTitle)}</page_title>\n<current_url>${__cpEscapeXmlText(n.currentUrl)}</current_url>${s}\n</context>\n\nThink like PageAgent naming an active browser task. Use the user's request as the main signal, then use page context only to make the title more specific. Put the final answer between <title> tags.`;
+}
+function __cpNormalizeGeneratedGroupTitle(e) {
+  const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t || t.toLowerCase() === "title") {
     return "";
   }
-  var n;
+  return __cpTrimSessionText(__cpStripSessionDisplayArtifacts(t), __CP_GROUP_TITLE_LIMIT);
+}
+function __cpBuildTaskStyleGroupTitleFallback(e, t = {}) {
+  const n = __cpNormalizeGroupTitleContext(t);
+  let s = __cpTrimSessionText(__cpStripSessionDisplayArtifacts(e || ""), 160);
+  if (s) {
+    s = s.split(/[\r\n]+|[。！？!?]+/).map(e => e.trim()).find(Boolean) || s;
+    s = s.replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, "");
+    s = s.replace(/^(please|can you|could you|would you|help me|let'?s)\s+/i, "");
+    s = s.replace(/^(请帮我|帮我|请|麻烦你|麻烦|可以帮我|能不能帮我|帮忙)\s*/u, "");
+    s = s.replace(/^(打开|前往|去|到)\s*/u, "");
+    s = __cpTrimSessionText(s, __CP_GROUP_TITLE_LIMIT);
+  }
+  if (s) {
+    return s;
+  }
+  if (n.tabTitle) {
+    return __cpTrimSessionText(n.tabTitle, __CP_GROUP_TITLE_LIMIT);
+  }
+  if (n.currentDomain) {
+    return __cpTrimSessionText(n.currentDomain, __CP_GROUP_TITLE_LIMIT);
+  }
+  if (n.availableTabs.length > 0) {
+    const e = n.availableTabs[0];
+    return __cpTrimSessionText(e.title || e.domain || e.url, __CP_GROUP_TITLE_LIMIT);
+  }
+  return "";
 }
 async function uQ(e, t) {
   try {
@@ -87985,7 +88033,7 @@ function CQ({
         return;
       }
       try {
-        const r = __cpRequireSidepanelProviderConfig(P);
+        const r = await __cpRequireSidepanelProviderConfig(P);
         __cpPanelDebugLog("chat.client_bootstrap", {
           sessionId: s,
           tabId: c,
@@ -88256,7 +88304,7 @@ function CQ({
         model: g,
         ...y
       } = e;
-      const P = __cpRequireSidepanelProviderConfig(await __cpReadCurrentProviderConfig());
+      const P = await __cpRequireSidepanelProviderConfig(await __cpReadCurrentProviderConfig());
       const L = P.defaultModel;
       const R = String(P.fastModel || "").trim();
       const __cpReasoningEffort = __cpNormalizeReasoningEffort(P.reasoningEffort);
@@ -88780,6 +88828,7 @@ function CQ({
     se.current = Date.now();
     re.current = false;
     let L;
+    let __cpGroupTitleAvailableTabs = [];
     if (b.length === 0 && h) {
       ie.current = setTimeout(() => {
         h();
@@ -88831,8 +88880,9 @@ function CQ({
       }
       L = [...g, n];
       try {
+        __cpGroupTitleAvailableTabs = await gt.getValidTabsWithMetadata(c);
         const e = {
-          availableTabs: await gt.getValidTabsWithMetadata(c)
+          availableTabs: __cpGroupTitleAvailableTabs
         };
         if (Array.isArray(n.content)) {
           Me(e, n.content, c);
@@ -88901,7 +88951,23 @@ function CQ({
             if (!(await gt.shouldGenerateGroupTitle(c))) {
               return;
             }
-            const t = await cQ(e, e => we(e, l, "sampling_title_generation"));
+            let n = {
+              availableTabs: __cpGroupTitleAvailableTabs
+            };
+            try {
+              const e = await chrome.tabs.get(c);
+              let t = "";
+              try {
+                t = e?.url ? new URL(e.url).hostname : "";
+              } catch (s) {}
+              n = {
+                currentDomain: t,
+                currentUrl: e?.url || "",
+                tabTitle: e?.title || "",
+                availableTabs: __cpGroupTitleAvailableTabs
+              };
+            } catch (e) {}
+            const t = await cQ(e, e => we(e, l, "sampling_title_generation"), n);
             if (t) {
               await gt.updateGroupTitle(c, t, true);
             }
@@ -89758,7 +89824,7 @@ function FQ(e) {
           Y.current = s.imageQuality ?? 85;
           X.current = s.maxImageDimension ?? 1568;
           Q.current = s.screenshotHistory ?? 1;
-          const r = __cpRequireSidepanelProviderConfig(await __cpReadCurrentProviderConfig());
+          const r = await __cpRequireSidepanelProviderConfig(await __cpReadCurrentProviderConfig());
           D.current = new Ft({
             baseURL: r.baseUrl,
             apiKey: r.apiKey,
@@ -90980,6 +91046,8 @@ function __cpNormalizeProviderModelEntries(e) {
   return Array.from(t.values());
 }
 const __cpFetchedModelsCacheKey = "customProviderFetchedModelsCache";
+const __cpHttpProviderStorageKey = "customProviderAllowHttp";
+const __cpHttpProviderDisabledMessage = "HTTP Base URL 未启用。请前往 Options 打开“允许 HTTP Base URL”后再使用 http:// 地址。";
 async function __cpReadCurrentProviderConfig() {
   try {
     const e = globalThis.CustomProviderModels;
@@ -90996,6 +91064,38 @@ async function __cpReadCurrentProviderConfig() {
   } catch (e) {
     return null;
   }
+}
+function __cpIsHttpBaseUrl(e) {
+  const t = globalThis.CustomProviderModels;
+  if (t && typeof t.isHttpBaseUrl == "function") {
+    return t.isHttpBaseUrl(e);
+  }
+  const n = String(e || "").trim();
+  if (!n) {
+    return false;
+  }
+  try {
+    return String(new URL(n).protocol || "").toLowerCase() === "http:";
+  } catch (e) {
+    return /^http:\/\//i.test(n);
+  }
+}
+async function __cpAssertSidepanelProviderHttpAllowed(e) {
+  const t = globalThis.CustomProviderModels;
+  if (t && typeof t.assertHttpProviderAllowed == "function") {
+    await t.assertHttpProviderAllowed(e);
+    return;
+  }
+  if (!__cpIsHttpBaseUrl(e?.baseUrl)) {
+    return;
+  }
+  try {
+    const t = await chrome.storage.local.get(__cpHttpProviderStorageKey);
+    if (t[__cpHttpProviderStorageKey] === true) {
+      return;
+    }
+  } catch (e) {}
+  throw new Error(__cpHttpProviderDisabledMessage);
 }
 function __cpNormalizeProviderFormat(e, t) {
   const n = String(e || "").trim().toLowerCase();
@@ -91098,13 +91198,17 @@ function __cpIsCustomProviderPrivacyMode(e) {
   const n = String(e?.apiKey || "").trim();
   return !!t.baseUrl && !!n && !!t.defaultModel;
 }
-function __cpRequireSidepanelProviderConfig(e) {
+async function __cpRequireSidepanelProviderConfig(e) {
   const t = __cpNormalizeSidepanelProviderConfig(e);
   const n = String(e?.apiKey || "").trim();
   const s = __cpNormalizeProviderFormat(e?.format, t.baseUrl);
   if (!t.baseUrl) {
     throw new Error("请先为自定义模型供应商配置 Base URL。");
   }
+  await __cpAssertSidepanelProviderHttpAllowed({
+    ...e,
+    baseUrl: t.baseUrl
+  });
   if (!n) {
     throw new Error("请先为自定义模型供应商配置 API Key。");
   }
@@ -91654,6 +91758,7 @@ const __CP_CHAT_SESSION_PREVIEW_LIMIT = 160;
 const __CP_CHAT_SESSION_TEXT_LIMIT = 4000;
 const __CP_CHAT_SESSION_JSON_TEXT_LIMIT = 800;
 const __CP_CHAT_SESSION_MAX_SNAPSHOT_CHARS = 180000;
+const __CP_GROUP_TITLE_LIMIT = 48;
 const __CP_DETACHED_WINDOW_LOCKS_KEY = "claw.detachedWindowLocks";
 function __cpIsChineseLocale(e) {
   const t = String(e || typeof navigator < "u" && navigator?.language || "").toLowerCase();
@@ -94816,7 +94921,7 @@ function o1() {
     }, [g]);
     const C = chrome.runtime.getURL("blocked.html");
     const _ = p !== "category0" && p !== null;
-    const M = p === "category1" || p === "category2" || p === "category_org_blocked" || x;
+    const M = p === "category1" || p === "category2" || p === "category_org_blocked";
     const S = p === "category3";
     t.setForcePrompt(S);
     a.useEffect(() => {
@@ -95788,14 +95893,14 @@ function o1() {
             if (Xt(l) && t) {
               r();
             }
-            if (l === "category1") {
+            if (false && l === "category1") {
               h = Qt(n.url);
               chrome.tabs.update(n.tabId, {
                 url: h
               });
             }
             if (i) {
-              d(h.startsWith(chrome.runtime.getURL("blocked.html")));
+              d(false);
             }
             en(s, n.url);
           } catch (Ct) {}

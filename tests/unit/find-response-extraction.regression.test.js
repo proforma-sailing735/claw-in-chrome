@@ -141,11 +141,89 @@ function testMessageLevelResponseText() {
   assert.equal(result, "FOUND: 0\nERROR: no matches");
 }
 
+function testTopLevelOutputTextWins() {
+  const result = extractFindReply({
+    output_text: "FOUND: 2\nSHOWING: 2\n---\nref_top | text | top-level output_text",
+    content: [
+      {
+        type: "text",
+        text: "should not win"
+      }
+    ]
+  });
+  assert.equal(result, "FOUND: 2\nSHOWING: 2\n---\nref_top | text | top-level output_text");
+}
+
+function testToolBlocksAreIgnoredInMixedContent() {
+  const result = extractFindReply({
+    content: [
+      {
+        type: "tool_use",
+        name: "browser.find",
+        input: {
+          query: "Search"
+        }
+      },
+      {
+        type: "tool_result",
+        content: "invisible tool result"
+      },
+      {
+        type: "text",
+        text: "FOUND: 1\nSHOWING: 1\n---\nref_4 | button | Search | button | visible text"
+      }
+    ]
+  });
+  assert.equal(result, "FOUND: 1\nSHOWING: 1\n---\nref_4 | button | Search | button | visible text");
+}
+
+function testNestedDeltaResponseTextIsExtracted() {
+  const result = extractFindReply({
+    content: [
+      {
+        type: "wrapper",
+        delta: {
+          response_text: "FOUND: 1\nSHOWING: 1\n---\nref_5 | textbox | Query | textbox | nested delta"
+        }
+      }
+    ]
+  });
+  assert.equal(result, "FOUND: 1\nSHOWING: 1\n---\nref_5 | textbox | Query | textbox | nested delta");
+}
+
+function testMessageStringFallbackWorks() {
+  const result = extractFindReply({
+    message: "FOUND: 1\nSHOWING: 1\n---\nref_6 | heading | Search results | heading | message string"
+  });
+  assert.equal(result, "FOUND: 1\nSHOWING: 1\n---\nref_6 | heading | Search results | heading | message string");
+}
+
+function testReasoningContentDoesNotLeakIntoVisibleReply() {
+  const result = extractFindReply({
+    content: [
+      {
+        type: "thinking",
+        thinking: "internal reasoning"
+      },
+      {
+        type: "reasoning",
+        reasoning: "more internal reasoning"
+      }
+    ]
+  });
+  assert.equal(result, "");
+}
+
 function main() {
   testAnthropicContentText();
   testOpenAIContentOutputTextPart();
   testNestedOutputContent();
   testMessageLevelResponseText();
+  testTopLevelOutputTextWins();
+  testToolBlocksAreIgnoredInMixedContent();
+  testNestedDeltaResponseTextIsExtracted();
+  testMessageStringFallbackWorks();
+  testReasoningContentDoesNotLeakIntoVisibleReply();
   console.log("find response extraction regression tests passed");
 }
 

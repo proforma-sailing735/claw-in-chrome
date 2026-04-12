@@ -4,10 +4,15 @@
       globalThis.__CP_OPTIONS_DEBUG__?.log(type, payload, level);
     } catch {}
   }
-  const STORAGE_KEY = "customProviderConfig";
-  const BACKUP_KEY = "customProviderOriginalApiKey";
+  const rootContract = globalThis.__CP_CONTRACT__ || {};
+  const providerContract = rootContract.customProvider || {};
+  const sessionContract = rootContract.session || {};
+  const STORAGE_KEY = providerContract.STORAGE_KEY || "customProviderConfig";
+  const BACKUP_KEY = providerContract.BACKUP_KEY || "customProviderOriginalApiKey";
+  const ANTHROPIC_API_KEY_STORAGE_KEY = providerContract.ANTHROPIC_API_KEY_STORAGE_KEY || "anthropicApiKey";
   const STYLE_ID = "cp-options-inline-provider-style";
   const ROOT_ID = "cp-options-enhancements-root";
+  const WORKFLOW_ROOT_ID = "cp-options-workflow-root";
   const SESSION_ROOT_ID = "cp-options-session-root";
   const PROMPT_ROOT_ID = "cp-options-prompt-root";
   const DEBUG_ROOT_ID = "cp-options-debug-root";
@@ -17,6 +22,7 @@
   const DEBUG_ANCHOR_ID = "cp-options-debug-anchor";
   const PANEL_ID = "cp-options-inline-provider-panel";
   const NAV_ITEM_ID = "cp-options-provider-nav-item";
+  const WORKFLOW_NAV_ITEM_ID = "cp-options-workflow-nav-item";
   const SESSION_NAV_ITEM_ID = "cp-options-session-nav-item";
   const PROMPT_NAV_ITEM_ID = "cp-options-prompt-nav-item";
   const BUILTIN_PROMPT_PROFILE_ID = "__builtin_default_prompt__";
@@ -25,7 +31,8 @@
   const SYSTEM_PROMPT_STORAGE_KEY = "chrome_ext_system_prompt";
   const PROMPT_PROFILES_STORAGE_KEY = "customSystemPromptProfiles";
   const PROMPT_ACTIVE_PROFILE_STORAGE_KEY = "customSystemPromptActiveProfileId";
-  const CHAT_SCOPE_PREFIX = "claw.chat.scopes.";
+  const WORKFLOW_STORAGE_KEY = "claw_site_workflows_v1";
+  const CHAT_SCOPE_PREFIX = sessionContract.CHAT_SCOPE_PREFIX || "claw.chat.scopes.";
   const CHAT_SESSION_LIMIT = 20;
   const CHAT_SESSION_TITLE_LIMIT = 80;
   const CHAT_SESSION_PREVIEW_LIMIT = 160;
@@ -194,6 +201,8 @@
       manualAddModelSubtitle: "Enter a model ID to add it to the current list.",
       manualModelIdLabel: "Model ID",
       manualModelIdPlaceholder: "e.g. gpt-5.4",
+      manualModelAliasLabel: "Model alias",
+      manualModelAliasPlaceholder: "Defaults to the model ID",
       manualAddConfirm: "Add model",
       cancelAction: "Cancel",
       manualModelIdRequired: "Enter a model ID first.",
@@ -301,6 +310,52 @@
       promptNameRequired: "Enter a profile name.",
       promptContentRequired: "Enter the agent role prompt first.",
       promptSaveFailure: "Failed to save this prompt profile.",
+      workflowTitle: "Workflow library",
+      workflowSubtitle: "Manage reusable workflow definitions derived from Teach Claw or handcrafted prompts. Save them locally, edit JSON directly, and import or export them in bulk.",
+      workflowNew: "New workflow",
+      workflowImport: "Import JSON",
+      workflowExportAll: "Export all",
+      workflowListCount: "{count} workflows saved locally.",
+      workflowEmptyTitle: "No workflows yet",
+      workflowEmptyHelp: "Create your first workflow to keep reusable browser task prompts in one place.",
+      workflowEditTitle: "Edit workflow",
+      workflowCreateTitle: "Create workflow",
+      workflowJsonLabel: "Workflow JSON",
+      workflowJsonHelp: "Use one JSON object per workflow. Required fields: name, label, description, prompt. Optional fields such as url_patterns, inputs, enabled, source, and version are preserved.",
+      workflowJsonPlaceholder: "{\n  \"name\": \"new-workflow\",\n  \"label\": \"New workflow\",\n  \"description\": \"What this workflow does\",\n  \"prompt\": \"Describe the repeatable task here.\",\n  \"url_patterns\": [\"*://*/*\"],\n  \"inputs\": [],\n  \"enabled\": true,\n  \"source\": \"user\",\n  \"version\": 1\n}",
+      workflowSave: "Save workflow",
+      workflowFormatJson: "Format JSON",
+      workflowUpdatedAtLabel: "Updated",
+      workflowPatternsLabel: "Match",
+      workflowInputsLabel: "Inputs",
+      workflowPromptLabel: "Prompt",
+      workflowSourceLabel: "Source",
+      workflowVersionLabel: "Version",
+      workflowSourceUser: "Custom",
+      workflowSourceRecorded: "Recorded",
+      workflowSourceImported: "Imported",
+      workflowEnable: "Enable",
+      workflowDisable: "Disable",
+      workflowEdit: "Edit",
+      workflowDelete: "Delete",
+      workflowExport: "Export",
+      workflowDeleteConfirm: "Delete workflow \"{name}\"?",
+      workflowSaved: "Workflow saved.",
+      workflowDeleted: "Workflow deleted.",
+      workflowEnabled: "Workflow enabled.",
+      workflowDisabled: "Workflow disabled.",
+      workflowImported: "Import completed: {count} workflows saved.",
+      workflowImportFailure: "Import failed. Check the JSON file format.",
+      workflowExported: "Workflow export started.",
+      workflowExportEmpty: "There are no workflows to export yet.",
+      workflowNameRequired: "The workflow JSON must include a non-empty name field.",
+      workflowLabelRequired: "The workflow JSON must include a non-empty label field.",
+      workflowDescriptionRequired: "The workflow JSON must include a non-empty description field.",
+      workflowPromptRequired: "The workflow JSON must include a non-empty prompt field.",
+      workflowJsonInvalid: "The workflow JSON is invalid. Check the syntax first.",
+      workflowJsonObjectRequired: "The editor only accepts a single workflow JSON object.",
+      workflowSaveFailure: "Failed to save this workflow.",
+      workflowDuplicateReplaceConfirm: "\"{name}\" already exists. Replace it?",
       inlineModelSaved: "Model updated.",
       inlineFastModelSaved: "Fast model updated.",
       inlineContextWindowSaved: "Context window updated.",
@@ -367,6 +422,8 @@
       manualAddModelSubtitle: "输入模型 ID 后即可加入当前列表。",
       manualModelIdLabel: "模型 ID",
       manualModelIdPlaceholder: "例如 gpt-5.4",
+      manualModelAliasLabel: "模型别名",
+      manualModelAliasPlaceholder: "默认与模型 ID 保持一致",
       manualAddConfirm: "添加模型",
       cancelAction: "取消",
       manualModelIdRequired: "请先输入模型 ID。",
@@ -474,6 +531,52 @@
       promptNameRequired: "请先填写配置名称。",
       promptContentRequired: "请先填写智能体角色提示词。",
       promptSaveFailure: "保存提示词配置失败。",
+      workflowTitle: "工作流管理",
+      workflowSubtitle: "集中保存 Teach Claw 产出的可复用流程提示词，也支持手动维护、直接编辑 JSON，以及导入导出本地工作流库。",
+      workflowNew: "新增工作流",
+      workflowImport: "导入 JSON",
+      workflowExportAll: "导出全部",
+      workflowListCount: "当前已保存 {count} 个工作流。",
+      workflowEmptyTitle: "还没有工作流",
+      workflowEmptyHelp: "先新增一个工作流，把常用浏览器任务 prompt 沉淀下来。",
+      workflowEditTitle: "编辑工作流",
+      workflowCreateTitle: "新增工作流",
+      workflowJsonLabel: "工作流 JSON",
+      workflowJsonHelp: "每次编辑一条工作流 JSON。必填字段：name、label、description、prompt。url_patterns、inputs、enabled、source、version 等可选字段会原样保留。",
+      workflowJsonPlaceholder: "{\n  \"name\": \"new-workflow\",\n  \"label\": \"新工作流\",\n  \"description\": \"这个工作流要完成什么\",\n  \"prompt\": \"描述要重复执行的浏览器任务。\",\n  \"url_patterns\": [\"*://*/*\"],\n  \"inputs\": [],\n  \"enabled\": true,\n  \"source\": \"user\",\n  \"version\": 1\n}",
+      workflowSave: "保存工作流",
+      workflowFormatJson: "格式化 JSON",
+      workflowUpdatedAtLabel: "更新时间",
+      workflowPatternsLabel: "匹配规则",
+      workflowInputsLabel: "输入项",
+      workflowPromptLabel: "Prompt",
+      workflowSourceLabel: "来源",
+      workflowVersionLabel: "版本",
+      workflowSourceUser: "自定义",
+      workflowSourceRecorded: "录制生成",
+      workflowSourceImported: "导入",
+      workflowEnable: "启用",
+      workflowDisable: "停用",
+      workflowEdit: "编辑",
+      workflowDelete: "删除",
+      workflowExport: "导出",
+      workflowDeleteConfirm: "确定删除工作流“{name}”吗？",
+      workflowSaved: "工作流已保存。",
+      workflowDeleted: "工作流已删除。",
+      workflowEnabled: "工作流已启用。",
+      workflowDisabled: "工作流已停用。",
+      workflowImported: "导入完成：已保存 {count} 个工作流。",
+      workflowImportFailure: "导入失败，请检查 JSON 文件格式。",
+      workflowExported: "工作流导出已开始。",
+      workflowExportEmpty: "当前还没有可导出的工作流。",
+      workflowNameRequired: "工作流 JSON 必须包含非空的 name 字段。",
+      workflowLabelRequired: "工作流 JSON 必须包含非空的 label 字段。",
+      workflowDescriptionRequired: "工作流 JSON 必须包含非空的 description 字段。",
+      workflowPromptRequired: "工作流 JSON 必须包含非空的 prompt 字段。",
+      workflowJsonInvalid: "工作流 JSON 格式不正确，请先检查语法。",
+      workflowJsonObjectRequired: "编辑器一次只能保存一条工作流 JSON 对象。",
+      workflowSaveFailure: "保存工作流失败。",
+      workflowDuplicateReplaceConfirm: "“{name}”已存在，是否覆盖？",
       inlineModelSaved: "模型已更新。",
       inlineFastModelSaved: "快速模型已更新。",
       inlineContextWindowSaved: "上下文窗口已更新。",
@@ -506,10 +609,10 @@
   const DEFAULT_MAX_OUTPUT_TOKENS = helpers.DEFAULT_MAX_OUTPUT_TOKENS || 10000;
   const MIN_CONTEXT_WINDOW = 20000;
   const CONTEXT_WINDOW_STEP_K = 10;
-  const PROFILES_STORAGE_KEY = helpers.PROFILES_STORAGE_KEY || "customProviderProfiles";
-  const ACTIVE_PROFILE_STORAGE_KEY = helpers.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
+  const PROFILES_STORAGE_KEY = helpers.PROFILES_STORAGE_KEY || providerContract.PROFILES_STORAGE_KEY || "customProviderProfiles";
+  const ACTIVE_PROFILE_STORAGE_KEY = helpers.ACTIVE_PROFILE_STORAGE_KEY || providerContract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
   const readProviderStoreState = helpers.readProviderStoreState || async function () {
-    const stored = await chrome.storage.local.get([STORAGE_KEY, BACKUP_KEY, "anthropicApiKey"]);
+    const stored = await chrome.storage.local.get([STORAGE_KEY, BACKUP_KEY, ANTHROPIC_API_KEY_STORAGE_KEY]);
     return {
       profiles: [],
       activeProfileId: null,
@@ -527,7 +630,7 @@
         fetchedModels: []
       }),
       originalApiKey: Object.prototype.hasOwnProperty.call(stored, BACKUP_KEY) ? stored[BACKUP_KEY] : undefined,
-      currentApiKey: stored.anthropicApiKey || ""
+      currentApiKey: stored[ANTHROPIC_API_KEY_STORAGE_KEY] || ""
     };
   };
   const saveProviderProfile = helpers.saveProviderProfile || async function (next) {
@@ -690,6 +793,137 @@
       await restoreAgentSystemPrompt();
     }
     return readPromptProfilesState();
+  }
+  function normalizeWorkflowText(value) {
+    return String(value || "").replace(/\r\n/g, "\n").trim();
+  }
+  function normalizeWorkflowPatterns(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map(function (entry) {
+      return String(entry || "").trim();
+    }).filter(Boolean);
+  }
+  function normalizeWorkflowInputs(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map(function (entry) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const name = String(entry.name || "").trim();
+        const description = String(entry.description || "").trim();
+        if (!name && !description) {
+          return null;
+        }
+        return {
+          ...entry,
+          name,
+          description,
+          required: entry.required !== false
+        };
+      }
+      const text = String(entry || "").trim();
+      if (!text) {
+        return null;
+      }
+      return {
+        name: text,
+        description: "",
+        required: true
+      };
+    }).filter(Boolean);
+  }
+  function createEmptyWorkflowDefinition() {
+    return {
+      name: "new-workflow",
+      label: "New workflow",
+      description: "",
+      prompt: "",
+      url_patterns: ["*://*/*"],
+      inputs: [],
+      enabled: true,
+      source: "user",
+      version: 1
+    };
+  }
+  function normalizeWorkflowEntry(raw, options) {
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? {
+      ...raw
+    } : {};
+    const settings = options && typeof options === "object" ? options : {};
+    const fallbackCreatedAt = normalizeSessionNumber(settings.fallbackCreatedAt, Date.now());
+    const fallbackUpdatedAt = normalizeSessionNumber(settings.fallbackUpdatedAt, Date.now());
+    const name = normalizeWorkflowText(source.name || source.id || "");
+    if (!name) {
+      return null;
+    }
+    const label = normalizeWorkflowText(source.label || source.title || name);
+    const description = normalizeWorkflowText(source.description || "");
+    const prompt = normalizeWorkflowText(source.prompt || source.taskPrompt || "");
+    const rawSource = String(source.source || "user").trim().toLowerCase();
+    return {
+      ...source,
+      name,
+      label: label || name,
+      description,
+      prompt,
+      url_patterns: normalizeWorkflowPatterns(source.url_patterns || source.urlPatterns || []),
+      inputs: normalizeWorkflowInputs(source.inputs),
+      enabled: source.enabled !== false,
+      source: rawSource === "recorded" ? "recorded" : rawSource === "imported" ? "imported" : "user",
+      version: Math.max(1, Math.round(Number(source.version) || 1)),
+      createdAt: normalizeSessionNumber(source.createdAt, fallbackCreatedAt),
+      updatedAt: normalizeSessionNumber(source.updatedAt, fallbackUpdatedAt)
+    };
+  }
+  async function readWorkflowStoreState() {
+    const stored = await chrome.storage.local.get([WORKFLOW_STORAGE_KEY]);
+    const raw = stored[WORKFLOW_STORAGE_KEY];
+    const payload = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const workflows = (Array.isArray(payload.workflows) ? payload.workflows : []).map(function (entry) {
+      return normalizeWorkflowEntry(entry, {
+        fallbackCreatedAt: Date.now(),
+        fallbackUpdatedAt: Date.now()
+      });
+    }).filter(Boolean).sort(function (left, right) {
+      return Number(right.updatedAt || 0) - Number(left.updatedAt || 0);
+    });
+    return {
+      workflows,
+      updatedAt: normalizeSessionNumber(payload.updatedAt, Date.now())
+    };
+  }
+  async function writeWorkflowStoreState(workflows) {
+    const payload = {
+      version: 1,
+      updatedAt: Date.now(),
+      workflows: (Array.isArray(workflows) ? workflows : []).map(function (entry) {
+        return normalizeWorkflowEntry(entry, {
+          fallbackCreatedAt: Date.now(),
+          fallbackUpdatedAt: Date.now()
+        });
+      }).filter(Boolean).sort(function (left, right) {
+        return Number(right.updatedAt || 0) - Number(left.updatedAt || 0);
+      })
+    };
+    await chrome.storage.local.set({
+      [WORKFLOW_STORAGE_KEY]: payload
+    });
+    return payload;
+  }
+  function downloadTextFile(filename, text, mimeType) {
+    const blob = new Blob([String(text || "")], {
+      type: mimeType || "application/json"
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = String(filename || "download.txt");
+    anchor.click();
+    setTimeout(function () {
+      URL.revokeObjectURL(objectUrl);
+    }, 0);
   }
   const createEmptyConfig = helpers.createEmptyConfig || function () {
     return {
@@ -1550,6 +1784,21 @@
       display: flex;
       gap: 0.75rem;
       flex-wrap: wrap;
+    }
+    .cp-workflow-json-textarea {
+      min-height: 30rem;
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      white-space: pre;
+      tab-size: 2;
+      resize: vertical;
+    }
+    .cp-workflow-header-actions {
+      align-items: stretch;
+    }
+    .cp-workflow-card-actions {
+      align-items: stretch;
     }
     .cp-session-browser-copy {
       display: grid;
@@ -2416,7 +2665,11 @@
     if (!isOptionsTabActive()) {
       return "";
     }
+    const customSubview = String(getHashQuery().get("cpSubview") || "").trim().toLowerCase();
     const value = String(getHashQuery().get("provider") || "").trim().toLowerCase();
+    if (customSubview === "workflow" || customSubview === "workflows") {
+      return "workflow";
+    }
     if (value === "prompt" || value === "prompts") {
       return "prompt";
     }
@@ -2431,6 +2684,9 @@
   function isProviderViewActive() {
     return getCustomSubview() === "provider";
   }
+  function isWorkflowViewActive() {
+    return getCustomSubview() === "workflow";
+  }
   function isSessionViewActive() {
     return getCustomSubview() === "session";
   }
@@ -2438,7 +2694,7 @@
     return getCustomSubview() === "prompt";
   }
   function setCustomSubview(view) {
-    const nextHash = view === "provider" ? "options?provider=true" : view === "session" ? "options?provider=session" : view === "prompt" ? "options?provider=prompt" : "options";
+    const nextHash = view === "provider" ? "options?provider=true" : view === "workflow" ? "options?provider=true&cpSubview=workflow" : view === "session" ? "options?provider=session" : view === "prompt" ? "options?provider=prompt" : "options";
     if (window.location.hash.replace(/^#/, "") !== nextHash) {
       window.location.hash = nextHash;
     }
@@ -2469,7 +2725,7 @@
   }
   function getNativeNavButtonClassNames(list, optionsItem) {
     const nativeButtons = Array.from((list || findSidebarNavList())?.children || []).filter(function (node) {
-      return node && node.id !== NAV_ITEM_ID && node.id !== SESSION_NAV_ITEM_ID && node.id !== PROMPT_NAV_ITEM_ID;
+      return node && node.id !== NAV_ITEM_ID && node.id !== WORKFLOW_NAV_ITEM_ID && node.id !== SESSION_NAV_ITEM_ID && node.id !== PROMPT_NAV_ITEM_ID;
     }).map(findNavButton).filter(Boolean);
     const activeButton = nativeButtons.find(isNativeNavButtonActive) || findNavButton(optionsItem) || nativeButtons[0] || null;
     const inactiveButton = nativeButtons.find(function (button) {
@@ -2533,6 +2789,7 @@
       return null;
     }
     const providerActive = isProviderViewActive();
+    const workflowActive = isWorkflowViewActive();
     const sessionActive = isSessionViewActive();
     const promptActive = isPromptViewActive();
     const providerNavItem = ensureCustomNavItem({
@@ -2548,6 +2805,21 @@
           target: "provider"
         });
         setCustomSubview("provider");
+      }
+    });
+    const workflowNavItem = ensureCustomNavItem({
+      list,
+      optionsItem,
+      optionsButton,
+      id: WORKFLOW_NAV_ITEM_ID,
+      label: strings.workflowTitle,
+      active: workflowActive,
+      onClick() {
+        debugLog("customProvider.nav.click", {
+          currentHash: location.hash,
+          target: "workflow"
+        });
+        setCustomSubview("workflow");
       }
     });
     const sessionNavItem = ensureCustomNavItem({
@@ -2584,18 +2856,22 @@
     if (providerNavItem && optionsItem.nextElementSibling !== providerNavItem) {
       optionsItem.insertAdjacentElement("afterend", providerNavItem);
     }
-    if (sessionNavItem && providerNavItem?.nextElementSibling !== sessionNavItem) {
-      (providerNavItem || optionsItem).insertAdjacentElement("afterend", sessionNavItem);
+    if (workflowNavItem && providerNavItem?.nextElementSibling !== workflowNavItem) {
+      (providerNavItem || optionsItem).insertAdjacentElement("afterend", workflowNavItem);
     }
-    if (promptNavItem && (sessionNavItem || providerNavItem)?.nextElementSibling !== promptNavItem) {
-      (sessionNavItem || providerNavItem || optionsItem).insertAdjacentElement("afterend", promptNavItem);
+    if (sessionNavItem && (workflowNavItem || providerNavItem)?.nextElementSibling !== sessionNavItem) {
+      (workflowNavItem || providerNavItem || optionsItem).insertAdjacentElement("afterend", sessionNavItem);
     }
-    const nextInactive = providerActive || sessionActive || promptActive;
+    if (promptNavItem && (workflowNavItem || sessionNavItem || providerNavItem)?.nextElementSibling !== promptNavItem) {
+      (workflowNavItem || sessionNavItem || providerNavItem || optionsItem).insertAdjacentElement("afterend", promptNavItem);
+    }
+    const nextInactive = providerActive || workflowActive || sessionActive || promptActive;
     if (optionsItem.classList.contains("cp-nav-override-inactive") !== nextInactive) {
       optionsItem.classList.toggle("cp-nav-override-inactive", nextInactive);
     }
     return {
       providerNavItem,
+      workflowNavItem,
       sessionNavItem,
       promptNavItem,
       nativeClassNames
@@ -2639,6 +2915,9 @@
     let strings = localeKey === "zh" ? UI_STRINGS.zh : UI_STRINGS.en;
     const providerRoot = createNode("div", "space-y-6");
     providerRoot.id = ROOT_ID;
+    const workflowRoot = createNode("div", "space-y-6");
+    workflowRoot.id = WORKFLOW_ROOT_ID;
+    workflowRoot.hidden = true;
     const debugMountRoot = createNode("div", "space-y-6 mt-6");
     debugMountRoot.id = DEBUG_ROOT_ID;
     const panel = createNode("section", "cp-page-card cp-page-panel bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8");
@@ -2840,6 +3119,11 @@
     manualModelInput.placeholder = strings.manualModelIdPlaceholder;
     manualModelField.appendChild(createNode("span", "cp-page-label", strings.manualModelIdLabel));
     manualModelField.appendChild(manualModelInput);
+    const manualModelAliasField = createNode("label", "cp-page-field");
+    const manualModelAliasInput = createNode("input", `cp-page-input ${SHARED_FRAME_CLASS}`);
+    manualModelAliasInput.placeholder = strings.manualModelAliasPlaceholder;
+    manualModelAliasField.appendChild(createNode("span", "cp-page-label", strings.manualModelAliasLabel));
+    manualModelAliasField.appendChild(manualModelAliasInput);
     const manualModelStatus = createNode("div", "cp-page-status");
     const manualModelActions = createNode("div", "cp-modal-actions");
     const manualModelCancelButton = createNode("button", "px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.cancelAction);
@@ -2850,6 +3134,7 @@
     manualModelActions.appendChild(manualModelConfirmButton);
     manualModelStack.appendChild(manualModelHeader);
     manualModelStack.appendChild(manualModelField);
+    manualModelStack.appendChild(manualModelAliasField);
     manualModelStack.appendChild(manualModelStatus);
     manualModelStack.appendChild(manualModelActions);
     manualModelCard.appendChild(manualModelStack);
@@ -2866,6 +3151,82 @@
     stack.appendChild(listView);
     stack.appendChild(editorView);
     panel.appendChild(stack);
+    const workflowPanel = createNode("section", "cp-page-card cp-page-panel bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8");
+    const workflowStack = createNode("div", "cp-page-stack");
+    const workflowHeader = createNode("div", "cp-provider-header");
+    workflowHeader.appendChild(createNode("h3", "cp-page-heading text-text-100 font-xl-bold", strings.workflowTitle));
+    workflowHeader.appendChild(createNode("p", "cp-page-subheading text-text-300 font-base", strings.workflowSubtitle));
+    const workflowHeaderAction = createNode("div", "cp-provider-header-action");
+    const workflowHeaderButtons = createNode("div", "cp-page-btn-row cp-workflow-header-actions");
+    const addWorkflowButton = createNode("button", "px-6 py-3 bg-brand-100 text-oncolor-100 rounded-xl hover:bg-brand-100/90 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowNew);
+    addWorkflowButton.type = "button";
+    const importWorkflowButton = createNode("button", `cp-page-btn cp-page-btn-quiet ${SHARED_FRAME_CLASS}`, strings.workflowImport);
+    importWorkflowButton.type = "button";
+    const exportAllWorkflowsButton = createNode("button", `cp-page-btn cp-page-btn-quiet ${SHARED_FRAME_CLASS}`, strings.workflowExportAll);
+    exportAllWorkflowsButton.type = "button";
+    workflowHeaderButtons.appendChild(addWorkflowButton);
+    workflowHeaderButtons.appendChild(importWorkflowButton);
+    workflowHeaderButtons.appendChild(exportAllWorkflowsButton);
+    workflowHeaderAction.appendChild(workflowHeaderButtons);
+    workflowHeader.appendChild(workflowHeaderAction);
+    const workflowSummaryMeta = createNode("div", "cp-page-meta");
+    const workflowListStatus = createNode("div", "cp-page-status");
+    const workflowListView = createNode("div", "cp-provider-view");
+    const workflowEmptyState = createNode("div", "cp-provider-empty");
+    workflowEmptyState.appendChild(createNode("h4", "cp-provider-empty-title", strings.workflowEmptyTitle));
+    workflowEmptyState.appendChild(createNode("p", "cp-provider-empty-help", strings.workflowEmptyHelp));
+    const workflowCardList = createNode("div", "cp-provider-card-list");
+    workflowListView.appendChild(workflowListStatus);
+    workflowListView.appendChild(workflowEmptyState);
+    workflowListView.appendChild(workflowCardList);
+    const workflowEditorView = createNode("div", "cp-provider-view");
+    workflowEditorView.hidden = true;
+    const workflowEditorToolbar = createNode("div", "cp-provider-editor-toolbar");
+    const workflowEditorToolbarCopy = createNode("div");
+    const workflowEditorTitle = createNode("h4", "cp-provider-editor-title", strings.workflowCreateTitle);
+    const workflowEditorHelp = createNode("p", "cp-provider-editor-help", strings.workflowJsonHelp);
+    workflowEditorToolbarCopy.appendChild(workflowEditorTitle);
+    workflowEditorToolbarCopy.appendChild(workflowEditorHelp);
+    const workflowBackButton = createNode("button", "cp-provider-floating-btn px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.backToList);
+    workflowBackButton.type = "button";
+    workflowEditorToolbar.appendChild(workflowEditorToolbarCopy);
+    const workflowForm = document.createElement("form");
+    workflowForm.id = "cp-workflow-editor-form";
+    workflowForm.className = "cp-page-stack cp-page-fieldset";
+    const workflowJsonField = createNode("label", "cp-page-field");
+    const workflowJsonLabelRow = createNode("div", "cp-page-label-row");
+    workflowJsonLabelRow.appendChild(createNode("span", "cp-page-label", strings.workflowJsonLabel));
+    workflowJsonLabelRow.appendChild(createNode("span", "cp-page-help", strings.workflowJsonHelp));
+    const workflowJsonTextarea = createNode("textarea", `cp-page-textarea cp-workflow-json-textarea ${SHARED_FRAME_CLASS}`);
+    workflowJsonTextarea.placeholder = strings.workflowJsonPlaceholder;
+    workflowJsonTextarea.spellcheck = false;
+    workflowJsonTextarea.wrap = "off";
+    workflowJsonField.appendChild(workflowJsonLabelRow);
+    workflowJsonField.appendChild(workflowJsonTextarea);
+    const workflowStatus = createNode("div", "cp-page-status");
+    const workflowFormatButton = createNode("button", "cp-provider-floating-btn px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowFormatJson);
+    workflowFormatButton.type = "button";
+    const workflowSaveButton = createNode("button", "cp-provider-floating-btn px-6 py-3 bg-brand-100 text-oncolor-100 rounded-xl hover:bg-brand-100/90 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowSave);
+    workflowSaveButton.type = "submit";
+    workflowSaveButton.setAttribute("form", workflowForm.id);
+    const workflowFloatingShell = createNode("div", "cp-provider-floating-shell");
+    workflowFloatingShell.hidden = true;
+    const workflowFloatingCapsule = createNode("div", `cp-provider-floating-capsule ${SHARED_FRAME_CLASS}`);
+    workflowFloatingCapsule.appendChild(workflowBackButton);
+    workflowFloatingCapsule.appendChild(workflowFormatButton);
+    workflowFloatingCapsule.appendChild(workflowSaveButton);
+    workflowFloatingShell.appendChild(workflowFloatingCapsule);
+    workflowForm.appendChild(workflowJsonField);
+    workflowForm.appendChild(workflowStatus);
+    workflowEditorView.appendChild(workflowEditorToolbar);
+    workflowEditorView.appendChild(workflowForm);
+    workflowStack.appendChild(workflowHeader);
+    workflowStack.appendChild(workflowSummaryMeta);
+    workflowStack.appendChild(workflowListView);
+    workflowStack.appendChild(workflowEditorView);
+    workflowPanel.appendChild(workflowStack);
+    workflowRoot.appendChild(workflowPanel);
+    workflowRoot.appendChild(workflowFloatingShell);
     const sessionRoot = createNode("div", "space-y-6");
     sessionRoot.id = SESSION_ROOT_ID;
     const sessionPanel = createNode("section", "cp-page-card cp-page-panel bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8");
@@ -3054,6 +3415,12 @@
       editingProfileId: null,
       isSaving: false
     };
+    const workflowState = {
+      workflows: [],
+      editorMode: "list",
+      editingWorkflowName: null,
+      isSaving: false
+    };
     const sessionState = {
       sessions: [],
       totalCount: 0,
@@ -3081,21 +3448,63 @@
       meta: null
     };
     const formatLabelByValue = new Map(providerFormatOptions);
+    function normalizeModelOption(item) {
+      const value = String(item?.value || item?.model || "").trim();
+      if (!value) {
+        return null;
+      }
+      return {
+        value,
+        label: String(item?.label || item?.name || value).trim() || value,
+        manual: !!item?.manual
+      };
+    }
+    function shouldReplaceMergedModelOption(current, candidate) {
+      if (!current) {
+        return true;
+      }
+      if (!current.manual && candidate.manual) {
+        return true;
+      }
+      if (current.manual && !candidate.manual) {
+        return false;
+      }
+      const currentLabel = String(current.label || current.value).trim() || current.value;
+      const candidateLabel = String(candidate.label || candidate.value).trim() || candidate.value;
+      const currentHasCustomLabel = currentLabel !== current.value;
+      const candidateHasCustomLabel = candidateLabel !== candidate.value;
+      if (!currentHasCustomLabel && candidateHasCustomLabel) {
+        return true;
+      }
+      if (current.manual && candidate.manual && currentLabel !== candidateLabel) {
+        return true;
+      }
+      return false;
+    }
     function mergeModelOptions(primary, secondary) {
       const merged = [];
-      const seen = new Set();
+      const indexByValue = new Map();
       for (const source of [primary, secondary]) {
         for (const item of source || []) {
-          const value = String(item?.value || item?.model || "").trim();
-          if (!value || seen.has(value)) {
+          const normalized = normalizeModelOption(item);
+          if (!normalized) {
             continue;
           }
-          seen.add(value);
-          merged.push({
-            value,
-            label: String(item?.label || item?.name || value).trim() || value,
-            manual: !!item?.manual
-          });
+          const existingIndex = indexByValue.get(normalized.value);
+          if (existingIndex === undefined) {
+            indexByValue.set(normalized.value, merged.length);
+            merged.push(normalized);
+            continue;
+          }
+          if (shouldReplaceMergedModelOption(merged[existingIndex], normalized)) {
+            merged[existingIndex] = {
+              ...merged[existingIndex],
+              ...normalized,
+              manual: merged[existingIndex].manual || normalized.manual
+            };
+          } else if (normalized.manual) {
+            merged[existingIndex].manual = true;
+          }
         }
       }
       return merged;
@@ -3187,7 +3596,7 @@
       if (name) {
         return name;
       }
-      const model = String(profile?.defaultModel || "").trim();
+      const model = getModelDisplayLabel(profile?.fetchedModels, profile?.defaultModel);
       const format = getFormatLabel(profile?.format);
       if (format && model) {
         return `${format} · ${model}`;
@@ -3196,6 +3605,16 @@
         return model;
       }
       return `${strings.unnamedProfile} ${index + 1}`;
+    }
+    function getModelDisplayLabel(models, modelValue) {
+      const value = String(modelValue || "").trim();
+      if (!value) {
+        return "";
+      }
+      const matched = (models || []).find(function (item) {
+        return String(item?.value || item?.model || "").trim() === value;
+      });
+      return String(matched?.label || matched?.name || value).trim() || value;
     }
     function getEndpointSummary(baseUrl) {
       const value = String(baseUrl || "").trim();
@@ -3658,6 +4077,400 @@
         promptProfilesState.isSaving = false;
         updatePromptControls();
       }
+    }
+    function applyWorkflowStoredState(stored) {
+      workflowState.workflows = Array.isArray(stored?.workflows) ? stored.workflows.slice() : [];
+    }
+    function updateWorkflowControls() {
+      const isEditing = workflowState.editorMode === "edit";
+      addWorkflowButton.disabled = workflowState.isSaving;
+      importWorkflowButton.disabled = workflowState.isSaving;
+      exportAllWorkflowsButton.disabled = workflowState.isSaving || workflowState.workflows.length === 0;
+      workflowFormatButton.disabled = workflowState.isSaving;
+      workflowSaveButton.disabled = workflowState.isSaving;
+      addWorkflowButton.hidden = isEditing;
+      importWorkflowButton.hidden = isEditing;
+      exportAllWorkflowsButton.hidden = isEditing;
+      workflowHeaderButtons.hidden = isEditing;
+    }
+    function updateWorkflowEditorModeUi() {
+      const isEditing = workflowState.editorMode === "edit";
+      workflowRoot.hidden = !isWorkflowViewActive();
+      workflowSummaryMeta.hidden = isEditing;
+      workflowListView.hidden = isEditing;
+      workflowEditorView.hidden = !isEditing;
+      workflowFloatingShell.hidden = !isEditing;
+      workflowEditorTitle.textContent = workflowState.editingWorkflowName ? strings.workflowEditTitle : strings.workflowCreateTitle;
+      updateWorkflowControls();
+    }
+    function createWorkflowSummaryItem(label, value, options) {
+      const config = options && typeof options === "object" ? options : {};
+      const item = createNode("div", "cp-provider-summary-item");
+      item.appendChild(createNode("span", "cp-provider-summary-label", label));
+      const text = createNode("span", "cp-provider-summary-value", value || strings.notConfigured);
+      if (config.mono) {
+        text.dataset.mono = "true";
+      }
+      if (config.multiline) {
+        text.dataset.truncate = "multiline";
+      } else if (config.truncate) {
+        text.dataset.truncate = "true";
+      }
+      item.appendChild(text);
+      return item;
+    }
+    function getWorkflowDisplayName(workflow, index) {
+      const label = normalizeWorkflowText(workflow?.label || workflow?.name || "");
+      return label || `Workflow ${index + 1}`;
+    }
+    function getWorkflowSourceLabel(workflow) {
+      const source = String(workflow?.source || "user").trim().toLowerCase();
+      if (source === "recorded") {
+        return strings.workflowSourceRecorded;
+      }
+      if (source === "imported") {
+        return strings.workflowSourceImported;
+      }
+      return strings.workflowSourceUser;
+    }
+    function getWorkflowPromptPreview(workflow) {
+      return trimSessionText(normalizeWorkflowText(workflow?.prompt || ""), 320) || strings.notConfigured;
+    }
+    function buildWorkflowEditorPayload(workflow) {
+      return JSON.stringify(workflow || createEmptyWorkflowDefinition(), null, 2);
+    }
+    function readWorkflowEditor() {
+      return String(workflowJsonTextarea.value || "").trim();
+    }
+    function writeWorkflowEditor(value) {
+      workflowJsonTextarea.value = String(value || "");
+    }
+    function openWorkflowList(kind, message) {
+      workflowState.editorMode = "list";
+      workflowState.editingWorkflowName = null;
+      setStatus(workflowStatus, "", "");
+      renderWorkflowCards();
+      updateWorkflowEditorModeUi();
+      setStatus(workflowListStatus, kind || "", message || "");
+    }
+    function openWorkflowEditor(workflowName) {
+      workflowState.editorMode = "edit";
+      workflowState.editingWorkflowName = workflowName || null;
+      const workflow = workflowName ? workflowState.workflows.find(function (entry) {
+        return normalizeWorkflowText(entry?.name || "") === normalizeWorkflowText(workflowName);
+      }) : null;
+      writeWorkflowEditor(buildWorkflowEditorPayload(workflow || createEmptyWorkflowDefinition()));
+      setStatus(workflowListStatus, "", "");
+      setStatus(workflowStatus, "", "");
+      updateWorkflowEditorModeUi();
+      requestAnimationFrame(function () {
+        workflowJsonTextarea.focus();
+      });
+    }
+    function renderWorkflowCards() {
+      workflowCardList.innerHTML = "";
+      workflowEmptyState.hidden = workflowState.workflows.length > 0;
+      workflowSummaryMeta.textContent = workflowState.workflows.length ? strings.workflowListCount.replace("{count}", String(workflowState.workflows.length)) : "";
+      workflowSummaryMeta.dataset.tone = workflowState.workflows.length ? "ready" : "";
+      workflowState.workflows.forEach(function (workflow, index) {
+        const isEnabled = workflow.enabled !== false;
+        const card = createNode("div", "cp-provider-card cp-page-card cp-page-panel bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8");
+        const cardHeader = createNode("div", "cp-provider-card-header");
+        const titleWrap = createNode("div", "cp-provider-card-title-wrap");
+        const titleRow = createNode("div", "cp-provider-card-title-row");
+        titleRow.appendChild(createNode("h4", "cp-provider-card-title", getWorkflowDisplayName(workflow, index)));
+        const sourceBadge = createNode("span", "cp-provider-badge", getWorkflowSourceLabel(workflow));
+        titleRow.appendChild(sourceBadge);
+        if (isEnabled) {
+          const enabledBadge = createNode("span", "cp-provider-badge", strings.workflowEnable);
+          enabledBadge.dataset.tone = "brand";
+          titleRow.appendChild(enabledBadge);
+        }
+        titleWrap.appendChild(titleRow);
+        titleWrap.appendChild(createNode("p", "cp-provider-card-subtitle", workflow.description || strings.notConfigured));
+        cardHeader.appendChild(titleWrap);
+        const summary = createNode("div", "cp-provider-summary");
+        const topRow = createNode("div", "cp-provider-summary-row");
+        topRow.dataset.columns = "3";
+        topRow.appendChild(createWorkflowSummaryItem(strings.workflowUpdatedAtLabel, formatTimestamp(workflow.updatedAt)));
+        topRow.appendChild(createWorkflowSummaryItem(strings.workflowPatternsLabel, Array.isArray(workflow.url_patterns) && workflow.url_patterns.length ? workflow.url_patterns.join(", ") : strings.notConfigured, {
+          multiline: true
+        }));
+        topRow.appendChild(createWorkflowSummaryItem(strings.workflowInputsLabel, String(Array.isArray(workflow.inputs) ? workflow.inputs.length : 0)));
+        const bottomRow = createNode("div", "cp-provider-summary-row");
+        bottomRow.dataset.columns = "2";
+        bottomRow.appendChild(createWorkflowSummaryItem(strings.workflowVersionLabel, String(workflow.version || 1)));
+        bottomRow.appendChild(createWorkflowSummaryItem(strings.workflowPromptLabel, getWorkflowPromptPreview(workflow), {
+          multiline: true
+        }));
+        summary.appendChild(topRow);
+        summary.appendChild(bottomRow);
+        const actionRow = createNode("div", "cp-provider-card-actions cp-workflow-card-actions");
+        const toggleButton = createNode("button", "px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", isEnabled ? strings.workflowDisable : strings.workflowEnable);
+        toggleButton.type = "button";
+        toggleButton.addEventListener("click", function () {
+          handleWorkflowToggle(workflow.name).catch(function () {});
+        });
+        const exportButton = createNode("button", "px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowExport);
+        exportButton.type = "button";
+        exportButton.addEventListener("click", function () {
+          exportWorkflowSet([workflow]);
+        });
+        const editButton = createNode("button", "px-6 py-3 bg-bg-100 text-text-200 border border-border-300 rounded-xl hover:bg-bg-200 hover:text-text-100 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowEdit);
+        editButton.type = "button";
+        editButton.addEventListener("click", function () {
+          openWorkflowEditor(workflow.name);
+        });
+        const deleteButton = createNode("button", "px-6 py-3 bg-bg-100 text-danger-100 border border-border-300 rounded-xl hover:bg-bg-200 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2", strings.workflowDelete);
+        deleteButton.type = "button";
+        deleteButton.addEventListener("click", function () {
+          handleWorkflowDelete(workflow.name).catch(function () {});
+        });
+        actionRow.appendChild(toggleButton);
+        actionRow.appendChild(exportButton);
+        actionRow.appendChild(editButton);
+        actionRow.appendChild(deleteButton);
+        card.appendChild(cardHeader);
+        card.appendChild(summary);
+        card.appendChild(actionRow);
+        workflowCardList.appendChild(card);
+      });
+      updateWorkflowControls();
+    }
+    async function refreshWorkflows(resetToList) {
+      const stored = await readWorkflowStoreState();
+      applyWorkflowStoredState(stored);
+      if (resetToList || workflowState.editorMode === "list") {
+        if (resetToList) {
+          setStatus(workflowListStatus, "", "");
+        }
+        openWorkflowList("", "");
+        return;
+      }
+      if (workflowState.editingWorkflowName) {
+        const workflow = workflowState.workflows.find(function (entry) {
+          return normalizeWorkflowText(entry?.name || "") === normalizeWorkflowText(workflowState.editingWorkflowName);
+        });
+        if (workflow) {
+          writeWorkflowEditor(buildWorkflowEditorPayload(workflow));
+          updateWorkflowEditorModeUi();
+        } else {
+          openWorkflowList("", "");
+        }
+      } else {
+        writeWorkflowEditor(buildWorkflowEditorPayload(createEmptyWorkflowDefinition()));
+        updateWorkflowEditorModeUi();
+      }
+      setStatus(workflowStatus, "", "");
+      updateWorkflowControls();
+    }
+    function normalizeWorkflowFromEditor(rawText) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(String(rawText || ""));
+      } catch (error) {
+        throw new Error(strings.workflowJsonInvalid);
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(strings.workflowJsonObjectRequired);
+      }
+      const existing = workflowState.editingWorkflowName ? workflowState.workflows.find(function (entry) {
+        return normalizeWorkflowText(entry?.name || "") === normalizeWorkflowText(workflowState.editingWorkflowName);
+      }) : null;
+      const normalized = normalizeWorkflowEntry({
+        ...parsed,
+        source: parsed.source || existing?.source || "user",
+        createdAt: parsed.createdAt || existing?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      }, {
+        fallbackCreatedAt: existing?.createdAt || Date.now(),
+        fallbackUpdatedAt: Date.now()
+      });
+      if (!normalized?.name) {
+        throw new Error(strings.workflowNameRequired);
+      }
+      if (!normalized.label) {
+        throw new Error(strings.workflowLabelRequired);
+      }
+      if (!normalized.description) {
+        throw new Error(strings.workflowDescriptionRequired);
+      }
+      if (!normalized.prompt) {
+        throw new Error(strings.workflowPromptRequired);
+      }
+      return normalized;
+    }
+    function exportWorkflowSet(workflows) {
+      const items = Array.isArray(workflows) ? workflows.map(function (entry) {
+        return normalizeWorkflowEntry(entry, {
+          fallbackCreatedAt: Date.now(),
+          fallbackUpdatedAt: Date.now()
+        });
+      }).filter(Boolean) : [];
+      if (!items.length) {
+        setStatus(workflowListStatus, "error", strings.workflowExportEmpty);
+        return;
+      }
+      const payload = JSON.stringify({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        workflows: items
+      }, null, 2);
+      const label = trimSessionText(items.length === 1 ? items[0].name : "workflows", 48).replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "workflows";
+      downloadTextFile(`claw-workflows-${label}.json`, payload, "application/json");
+      setStatus(workflowListStatus, "success", strings.workflowExported);
+    }
+    async function handleWorkflowToggle(workflowName) {
+      const currentName = normalizeWorkflowText(workflowName);
+      const updated = workflowState.workflows.map(function (entry) {
+        if (normalizeWorkflowText(entry?.name || "") !== currentName) {
+          return entry;
+        }
+        return normalizeWorkflowEntry({
+          ...entry,
+          enabled: entry.enabled === false,
+          updatedAt: Date.now()
+        }, {
+          fallbackCreatedAt: entry.createdAt,
+          fallbackUpdatedAt: Date.now()
+        });
+      }).filter(Boolean);
+      await writeWorkflowStoreState(updated);
+      applyWorkflowStoredState({
+        workflows: updated
+      });
+      openWorkflowList("success", updated.find(function (entry) {
+        return normalizeWorkflowText(entry?.name || "") === currentName;
+      })?.enabled === false ? strings.workflowDisabled : strings.workflowEnabled);
+    }
+    async function handleWorkflowDelete(workflowName) {
+      const normalizedName = normalizeWorkflowText(workflowName);
+      const workflow = workflowState.workflows.find(function (entry) {
+        return normalizeWorkflowText(entry?.name || "") === normalizedName;
+      });
+      const label = getWorkflowDisplayName(workflow, 0);
+      if (!window.confirm(strings.workflowDeleteConfirm.replace("{name}", label))) {
+        return;
+      }
+      const updated = workflowState.workflows.filter(function (entry) {
+        return normalizeWorkflowText(entry?.name || "") !== normalizedName;
+      });
+      await writeWorkflowStoreState(updated);
+      applyWorkflowStoredState({
+        workflows: updated
+      });
+      if (workflowState.editingWorkflowName && normalizeWorkflowText(workflowState.editingWorkflowName) === normalizedName) {
+        workflowState.editingWorkflowName = null;
+      }
+      openWorkflowList("success", strings.workflowDeleted);
+    }
+    async function handleWorkflowSave() {
+      let normalized = null;
+      try {
+        normalized = normalizeWorkflowFromEditor(readWorkflowEditor());
+      } catch (error) {
+        setStatus(workflowStatus, "error", error && typeof error.message === "string" ? error.message : strings.workflowSaveFailure);
+        workflowJsonTextarea.focus();
+        return;
+      }
+      const previousName = normalizeWorkflowText(workflowState.editingWorkflowName || "");
+      const duplicate = workflowState.workflows.find(function (entry) {
+        const entryName = normalizeWorkflowText(entry?.name || "");
+        return entryName === normalized.name && entryName !== previousName;
+      });
+      if (duplicate && !window.confirm(strings.workflowDuplicateReplaceConfirm.replace("{name}", normalized.name))) {
+        return;
+      }
+      try {
+        workflowState.isSaving = true;
+        updateWorkflowControls();
+        const filtered = workflowState.workflows.filter(function (entry) {
+          const entryName = normalizeWorkflowText(entry?.name || "");
+          return entryName !== previousName && entryName !== normalized.name;
+        });
+        filtered.unshift(normalized);
+        await writeWorkflowStoreState(filtered);
+        applyWorkflowStoredState({
+          workflows: filtered
+        });
+        openWorkflowList("success", strings.workflowSaved);
+      } catch (error) {
+        setStatus(workflowStatus, "error", error && typeof error.message === "string" ? error.message : strings.workflowSaveFailure);
+      } finally {
+        workflowState.isSaving = false;
+        updateWorkflowControls();
+      }
+    }
+    function formatWorkflowEditorJson() {
+      try {
+        const normalized = normalizeWorkflowFromEditor(readWorkflowEditor());
+        writeWorkflowEditor(buildWorkflowEditorPayload(normalized));
+        setStatus(workflowStatus, "", "");
+      } catch (error) {
+        setStatus(workflowStatus, "error", error && typeof error.message === "string" ? error.message : strings.workflowJsonInvalid);
+      }
+    }
+    function openWorkflowImportPicker() {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,application/json";
+      input.addEventListener("change", function () {
+        const file = input.files && input.files[0];
+        if (!file) {
+          return;
+        }
+        file.text().then(async function (text) {
+          const parsed = JSON.parse(String(text || ""));
+          const rawItems = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.workflows) ? parsed.workflows : parsed && typeof parsed === "object" ? [parsed] : [];
+          if (!rawItems.length) {
+            throw new Error(strings.workflowImportFailure);
+          }
+          let nextWorkflows = workflowState.workflows.slice();
+          let importedCount = 0;
+          for (const rawItem of rawItems) {
+            const normalized = normalizeWorkflowEntry({
+              ...rawItem,
+              source: rawItem?.source || "imported",
+              updatedAt: Date.now()
+            }, {
+              fallbackCreatedAt: Date.now(),
+              fallbackUpdatedAt: Date.now()
+            });
+            if (!normalized?.name || !normalized.label || !normalized.description || !normalized.prompt) {
+              continue;
+            }
+            const existingIndex = nextWorkflows.findIndex(function (entry) {
+              return normalizeWorkflowText(entry?.name || "") === normalized.name;
+            });
+            if (existingIndex >= 0 && !window.confirm(strings.workflowDuplicateReplaceConfirm.replace("{name}", normalized.name))) {
+              continue;
+            }
+            if (existingIndex >= 0) {
+              const existing = nextWorkflows[existingIndex];
+              nextWorkflows.splice(existingIndex, 1, normalizeWorkflowEntry({
+                ...normalized,
+                createdAt: existing.createdAt || normalized.createdAt
+              }, {
+                fallbackCreatedAt: existing.createdAt || normalized.createdAt,
+                fallbackUpdatedAt: Date.now()
+              }));
+            } else {
+              nextWorkflows.unshift(normalized);
+            }
+            importedCount += 1;
+          }
+          await writeWorkflowStoreState(nextWorkflows);
+          applyWorkflowStoredState({
+            workflows: nextWorkflows
+          });
+          openWorkflowList(importedCount ? "success" : "error", importedCount ? strings.workflowImported.replace("{count}", String(importedCount)) : strings.workflowImportFailure);
+        }).catch(function () {
+          setStatus(workflowListStatus, "error", strings.workflowImportFailure);
+        });
+      }, {
+        once: true
+      });
+      input.click();
     }
     function getSessionDisplayUrl(session) {
       return trimSessionText(session?.anchorUrl || session?.currentUrl || session?.domain || session?.scopeId || "", 240);
@@ -4160,7 +4973,12 @@
       closeActiveDropdown();
       isManualModelDialogOpen = true;
       manualModelOverlay.hidden = false;
-      manualModelInput.value = modelSelect.value || "";
+      const currentModelId = String(modelSelect.value || "").trim();
+      const currentModel = state.availableModels.find(function (item) {
+        return String(item?.value || "").trim() === currentModelId;
+      }) || null;
+      manualModelInput.value = currentModelId;
+      setManualModelAliasValue(String(currentModel?.label || currentModelId || "").trim(), true);
       setStatus(manualModelStatus, "", "");
       requestAnimationFrame(function () {
         manualModelInput.focus();
@@ -4172,8 +4990,25 @@
       manualModelOverlay.hidden = true;
       setStatus(manualModelStatus, "", "");
     }
+    let manualModelAliasAutoValue = "";
+    function setManualModelAliasValue(value, isAutoSynced) {
+      const nextValue = String(value || "").trim();
+      manualModelAliasInput.value = nextValue;
+      manualModelAliasAutoValue = nextValue;
+      manualModelAliasInput.dataset.autoSynced = isAutoSynced ? "true" : "false";
+    }
+    function syncManualModelAliasFromId(force) {
+      const modelId = String(manualModelInput.value || "").trim();
+      const aliasValue = String(manualModelAliasInput.value || "").trim();
+      const isAutoSynced = manualModelAliasInput.dataset.autoSynced !== "false";
+      if (!force && !isAutoSynced && aliasValue && aliasValue !== manualModelAliasAutoValue) {
+        return;
+      }
+      setManualModelAliasValue(modelId, true);
+    }
     function applyManualModel() {
       const modelId = String(manualModelInput.value || "").trim();
+      const modelLabel = String(manualModelAliasInput.value || "").trim() || modelId;
       if (!modelId) {
         setStatus(manualModelStatus, "error", strings.manualModelIdRequired);
         manualModelInput.focus();
@@ -4184,7 +5019,7 @@
       });
       state.availableModels = mergeModelOptions(state.availableModels, [{
         value: modelId,
-        label: modelId,
+        label: modelLabel,
         manual: true
       }]);
       renderModelOptions(modelId);
@@ -4414,8 +5249,20 @@
     backToListButton.addEventListener("click", function () {
       openList("", "");
     });
+    addWorkflowButton.addEventListener("click", function () {
+      openWorkflowEditor(null);
+    });
+    importWorkflowButton.addEventListener("click", function () {
+      openWorkflowImportPicker();
+    });
+    exportAllWorkflowsButton.addEventListener("click", function () {
+      exportWorkflowSet(workflowState.workflows);
+    });
     addPromptProfileButton.addEventListener("click", function () {
       openPromptEditor(null);
+    });
+    workflowBackButton.addEventListener("click", function () {
+      openWorkflowList("", "");
     });
     promptBackButton.addEventListener("click", function () {
       openPromptList("", "");
@@ -4429,9 +5276,19 @@
     promptTextarea.addEventListener("input", function () {
       setStatus(promptStatus, "", "");
     });
+    workflowJsonTextarea.addEventListener("input", function () {
+      setStatus(workflowStatus, "", "");
+    });
     promptForm.addEventListener("submit", function (event) {
       event.preventDefault();
       handlePromptSave().catch(function () {});
+    });
+    workflowFormatButton.addEventListener("click", function () {
+      formatWorkflowEditorJson();
+    });
+    workflowForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      handleWorkflowSave().catch(function () {});
     });
     writePromptForm({
       name: "",
@@ -4439,6 +5296,8 @@
     });
     updatePromptEditorModeUi();
     updatePromptControls();
+    writeWorkflowEditor(buildWorkflowEditorPayload(createEmptyWorkflowDefinition()));
+    updateWorkflowEditorModeUi();
     renderSessionCards();
     renderSessionHistoryCards();
     renderSessionRecord();
@@ -4500,7 +5359,28 @@
     manualModelConfirmButton.addEventListener("click", function () {
       applyManualModel();
     });
+    manualModelInput.addEventListener("input", function () {
+      syncManualModelAliasFromId(false);
+    });
+    manualModelAliasInput.addEventListener("input", function () {
+      const modelId = String(manualModelInput.value || "").trim();
+      const aliasValue = String(manualModelAliasInput.value || "").trim();
+      const isStillAutoSynced = !aliasValue || aliasValue === modelId || aliasValue === manualModelAliasAutoValue;
+      manualModelAliasInput.dataset.autoSynced = isStillAutoSynced ? "true" : "false";
+      if (isStillAutoSynced) {
+        manualModelAliasAutoValue = aliasValue;
+      }
+    });
     manualModelInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyManualModel();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeManualModelDialog();
+      }
+    });
+    manualModelAliasInput.addEventListener("keydown", function (event) {
       if (event.key === "Enter") {
         event.preventDefault();
         applyManualModel();
@@ -4637,7 +5517,12 @@
           refreshPromptProfiles(false).catch(function () {});
         }
       }
-      if (STORAGE_KEY in changes || PROFILES_STORAGE_KEY in changes || ACTIVE_PROFILE_STORAGE_KEY in changes || BACKUP_KEY in changes || "anthropicApiKey" in changes) {
+      if (WORKFLOW_STORAGE_KEY in changes) {
+        if (isWorkflowViewActive()) {
+          refreshWorkflows(false).catch(function () {});
+        }
+      }
+      if (STORAGE_KEY in changes || PROFILES_STORAGE_KEY in changes || ACTIVE_PROFILE_STORAGE_KEY in changes || BACKUP_KEY in changes || ANTHROPIC_API_KEY_STORAGE_KEY in changes) {
         if (isProviderViewActive()) {
           refresh(false).catch(function () {});
         }
@@ -4659,6 +5544,7 @@
         return;
       }
       const providerActive = isProviderViewActive();
+      const workflowActive = isWorkflowViewActive();
       const sessionActive = isSessionViewActive();
       const promptActive = isPromptViewActive();
       const providerHost = findMountAnchor(PROVIDER_ANCHOR_ID);
@@ -4674,6 +5560,9 @@
         });
         if (providerRoot.parentNode) {
           providerRoot.remove();
+        }
+        if (workflowRoot.parentNode) {
+          workflowRoot.remove();
         }
         if (sessionRoot.parentNode) {
           sessionRoot.remove();
@@ -4693,6 +5582,9 @@
         if (providerRoot.parentNode) {
           providerRoot.remove();
         }
+        if (workflowRoot.parentNode) {
+          workflowRoot.remove();
+        }
         if (sessionRoot.parentNode) {
           sessionRoot.remove();
         }
@@ -4706,14 +5598,17 @@
         return;
       }
       const providerNeedsRefresh = providerRoot.parentNode !== providerHost;
+      const workflowNeedsRefresh = workflowRoot.parentNode !== providerHost;
       const sessionNeedsRefresh = sessionRoot.parentNode !== sessionHost;
       const promptNeedsRefresh = promptRoot.parentNode !== promptHost;
       const debugNeedsRefresh = debugMountRoot.parentNode !== debugHost;
       debugLog("customProvider.syncMount.host", {
         providerActive,
+        workflowActive,
         sessionActive,
         promptActive,
         providerNeedsRefresh,
+        workflowNeedsRefresh,
         sessionNeedsRefresh,
         promptNeedsRefresh,
         debugNeedsRefresh,
@@ -4725,6 +5620,9 @@
       if (providerRoot.parentNode !== providerHost) {
         providerHost.appendChild(providerRoot);
       }
+      if (workflowRoot.parentNode !== providerHost) {
+        providerHost.appendChild(workflowRoot);
+      }
       if (sessionRoot.parentNode !== sessionHost) {
         sessionHost.appendChild(sessionRoot);
       }
@@ -4734,16 +5632,21 @@
       if (debugMountRoot.parentNode !== debugHost) {
         debugHost.appendChild(debugMountRoot);
       }
+      providerRoot.hidden = !providerActive;
+      workflowRoot.hidden = !workflowActive;
       if (!providerActive && !promptActive) {
         closeManualModelDialog();
       }
       if (!sessionActive && sessionState.viewMode === "record") {
         closeSessionRecordDialog();
       }
-      lastHost = providerActive ? providerHost : sessionActive ? sessionHost : promptActive ? promptHost : debugHost;
+      lastHost = providerActive || workflowActive ? providerHost : sessionActive ? sessionHost : promptActive ? promptHost : debugHost;
       const refreshTasks = [];
       if (providerNeedsRefresh) {
         refreshTasks.push(refresh(true));
+      }
+      if (workflowNeedsRefresh) {
+        refreshTasks.push(refreshWorkflows(true));
       }
       if (sessionNeedsRefresh) {
         refreshTasks.push(refreshSessions());
@@ -4758,6 +5661,7 @@
         await Promise.allSettled(refreshTasks);
         debugLog("customProvider.syncMount.refreshed", {
           providerActive,
+          workflowActive,
           sessionActive,
           promptActive,
           refreshCount: refreshTasks.length
@@ -4839,6 +5743,9 @@
       closeActiveDropdown();
       if (providerRoot.parentNode) {
         providerRoot.remove();
+      }
+      if (workflowRoot.parentNode) {
+        workflowRoot.remove();
       }
       if (sessionRoot.parentNode) {
         sessionRoot.remove();

@@ -1,7 +1,10 @@
 (function () {
-  const STORAGE_KEY = "customProviderConfig";
-  const PROFILES_STORAGE_KEY = "customProviderProfiles";
-  const ACTIVE_PROFILE_STORAGE_KEY = "customProviderActiveProfileId";
+  const contract = globalThis.__CP_CONTRACT__?.customProvider || {};
+  const STORAGE_KEY = contract.STORAGE_KEY || "customProviderConfig";
+  const PROFILES_STORAGE_KEY = contract.PROFILES_STORAGE_KEY || "customProviderProfiles";
+  const ACTIVE_PROFILE_STORAGE_KEY = contract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
+  const HTTP_PROVIDER_STORAGE_KEY = contract.HTTP_PROVIDER_STORAGE_KEY || "customProviderAllowHttp";
+  const HTTP_PROVIDER_DISABLED_MESSAGE = "HTTP Base URL 未启用。请前往 Options 打开“允许 HTTP Base URL”后再使用 http:// 地址。";
   const PATCH_FLAG = "__customProviderFormatAdapterPatched__";
   const NATIVE_FETCH_KEY = "__customProviderNativeFetch__";
   const OPENAI_CHAT_FORMAT = "openai_chat";
@@ -37,6 +40,39 @@
   function getProviderStoreHelpers() {
     const helpers = globalThis.CustomProviderModels;
     return helpers && typeof helpers.readProviderStoreState === "function" ? helpers : null;
+  }
+  function isHttpBaseUrl(value) {
+    const helpers = getProviderStoreHelpers();
+    if (helpers && typeof helpers.isHttpBaseUrl === "function") {
+      return helpers.isHttpBaseUrl(value);
+    }
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return false;
+    }
+    try {
+      return String(new URL(raw).protocol || "").toLowerCase() === "http:";
+    } catch {
+      return /^http:\/\//i.test(raw);
+    }
+  }
+  async function assertHttpProviderAllowed(config) {
+    const helpers = getProviderStoreHelpers();
+    if (helpers && typeof helpers.assertHttpProviderAllowed === "function") {
+      await helpers.assertHttpProviderAllowed(config);
+      return;
+    }
+    if (!isHttpBaseUrl(config?.baseUrl)) {
+      return;
+    }
+    const storage = globalThis.chrome?.storage?.local;
+    if (!storage) {
+      throw new Error(HTTP_PROVIDER_DISABLED_MESSAGE);
+    }
+    const stored = await storage.get(HTTP_PROVIDER_STORAGE_KEY);
+    if (stored[HTTP_PROVIDER_STORAGE_KEY] !== true) {
+      throw new Error(HTTP_PROVIDER_DISABLED_MESSAGE);
+    }
   }
   function normalizeFormat(value) {
     const format = String(value || "").trim().toLowerCase();
@@ -281,6 +317,48 @@
     } catch {
       return fallback;
     }
+  }
+  function safeJsonParseDeep(value, fallback, maxDepth) {
+    let current = value;
+    const depthLimit = Number.isFinite(maxDepth) && maxDepth > 0 ? Math.floor(maxDepth) : 3;
+    for (let depth = 0; depth < depthLimit && typeof current === "string"; depth++) {
+      const trimmed = current.trim();
+      if (!trimmed) {
+        return fallback;
+      }
+      const parsed = safeJsonParse(trimmed, current);
+      if (parsed === current) {
+        break;
+      }
+      current = parsed;
+    }
+    return current === undefined ? fallback : current;
+  }
+  function unwrapJsonCodeFence(text) {
+    const source = typeof text === "string" ? text.trim() : "";
+    if (!source) {
+      return source;
+    }
+    const match = source.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    return match ? match[1].trim() : source;
+  }
+  function parseLooseJsonObject(text) {
+    const source = unwrapJsonCodeFence(text);
+    if (!source) {
+      return null;
+    }
+    const direct = safeJsonParseDeep(source, null, 3);
+    if (direct && typeof direct === "object") {
+      return direct;
+    }
+    if (!source.startsWith("{") || !source.endsWith("}")) {
+      return null;
+    }
+    return safeJsonParse(source, null);
+  }
+  function normalizeToolInputValue(value) {
+    const parsed = safeJsonParseDeep(value, value, 3);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   }
   function stringifyContent(value) {
     if (typeof value === "string") {
@@ -662,9 +740,18 @@
     };
   }
   function parseInlineToolCallPayload(rawPayload, fallbackId) {
-    const parsed = safeJsonParse(typeof rawPayload === "string" ? rawPayload.trim() : "", null);
+    let parsed = rawPayload && typeof rawPayload === "object" ? safeJsonParseDeep(rawPayload, rawPayload, 3) : parseLooseJsonObject(rawPayload);
     if (!parsed || typeof parsed !== "object") {
       return null;
+    }
+    if (Array.isArray(parsed?.tool_calls) && parsed.tool_calls[0] && typeof parsed.tool_calls[0] === "object") {
+      parsed = parsed.tool_calls[0];
+    } else if (parsed?.message && typeof parsed.message === "object") {
+      if (Array.isArray(parsed.message.tool_calls) && parsed.message.tool_calls[0] && typeof parsed.message.tool_calls[0] === "object") {
+        parsed = parsed.message.tool_calls[0];
+      } else if (parsed.message.function_call && typeof parsed.message.function_call === "object") {
+        parsed = parsed.message.function_call;
+      }
     }
     const name = typeof parsed.name === "string" && parsed.name ? parsed.name : typeof parsed?.function?.name === "string" && parsed.function.name ? parsed.function.name : "";
     if (!name) {
@@ -675,16 +762,54 @@
       input = parsed.parameters;
     } else if (parsed.input && typeof parsed.input === "object" && !Array.isArray(parsed.input)) {
       input = parsed.input;
-    } else if (typeof parsed.arguments === "string") {
-      input = safeJsonParse(parsed.arguments, {});
+    } else if (parsed.arguments !== undefined) {
+      input = normalizeToolInputValue(parsed.arguments);
     } else if (parsed.arguments && typeof parsed.arguments === "object" && !Array.isArray(parsed.arguments)) {
       input = parsed.arguments;
+    } else if (parsed?.function?.arguments !== undefined) {
+      input = normalizeToolInputValue(parsed.function.arguments);
     }
     return {
-      id: String(parsed.id || parsed.tool_call_id || fallbackId || "tool_call"),
+      id: String(parsed.id || parsed.tool_call_id || parsed.call_id || parsed?.function?.id || fallbackId || "tool_call"),
       name,
       input: input && typeof input === "object" && !Array.isArray(input) ? input : {},
       inputJson: JSON.stringify(input && typeof input === "object" && !Array.isArray(input) ? input : {})
+    };
+  }
+  function createAnthropicToolUseBlock(parsedToolCall) {
+    if (!parsedToolCall) {
+      return null;
+    }
+    return {
+      type: "tool_use",
+      id: parsedToolCall.id,
+      name: parsedToolCall.name,
+      input: parsedToolCall.input
+    };
+  }
+  function promoteLooseToolCallTextBlocks(content, nextFallbackId) {
+    if (!Array.isArray(content) || !content.length) {
+      return {
+        content: Array.isArray(content) ? content : [],
+        convertedCount: 0
+      };
+    }
+    const normalized = [];
+    let convertedCount = 0;
+    for (const block of content) {
+      if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
+        const parsedToolCall = parseInlineToolCallPayload(block.text, typeof nextFallbackId === "function" ? nextFallbackId() : "normalized_tool_call");
+        if (parsedToolCall) {
+          normalized.push(createAnthropicToolUseBlock(parsedToolCall));
+          convertedCount++;
+          continue;
+        }
+      }
+      normalized.push(block);
+    }
+    return {
+      content: normalized,
+      convertedCount
     };
   }
   function consumeThinkTaggedText(state, text, handlers, final) {
@@ -1166,6 +1291,15 @@
     };
     let hasToolUse = false;
     let hasVisibleText = false;
+    const appendLooseToolCall = function (rawPayload, prefix) {
+      const parsedToolCall = parseInlineToolCallPayload(rawPayload, prefix + inlineToolCallCount++);
+      if (!parsedToolCall) {
+        return false;
+      }
+      content.push(createAnthropicToolUseBlock(parsedToolCall));
+      hasToolUse = true;
+      return true;
+    };
     const consumeVisibleText = function (text) {
       if (typeof text !== "string" || !text.trim()) {
         return;
@@ -1174,9 +1308,24 @@
       consumeThinkTaggedText(thinkTagState, text, thinkTagHandlers, false);
     };
     if (typeof message.content === "string") {
-      consumeVisibleText(message.content);
+      if (!appendLooseToolCall(message.content, "content_tool_call_")) {
+        consumeVisibleText(message.content);
+      }
+    } else if (message.content && typeof message.content === "object" && !Array.isArray(message.content)) {
+      if (!appendLooseToolCall(message.content, "content_tool_call_")) {
+        const visibleText = extractOpenAIChatTextFromPart(message.content);
+        if (visibleText) {
+          consumeVisibleText(visibleText);
+        }
+      }
     } else if (Array.isArray(message.content)) {
       for (const part of message.content) {
+        const parsedToolCall = parseInlineToolCallPayload(part, "content_tool_call_" + inlineToolCallCount++);
+        if (parsedToolCall) {
+          content.push(createAnthropicToolUseBlock(parsedToolCall));
+          hasToolUse = true;
+          continue;
+        }
         const type = String(part?.type || "").trim().toLowerCase();
         if (type === "refusal" && typeof part.refusal === "string" && part.refusal) {
           consumeThinkTaggedText(thinkTagState, part.refusal, thinkTagHandlers, false);
@@ -1184,14 +1333,18 @@
         }
         const visibleText = extractOpenAIChatTextFromPart(part);
         if (visibleText) {
-          consumeVisibleText(visibleText);
+          if (!appendLooseToolCall(visibleText, "content_text_tool_call_")) {
+            consumeVisibleText(visibleText);
+          }
         }
       }
     }
     if (!hasVisibleText) {
       for (const candidate of [message.output_text, message.content_text, message.response_text]) {
         if (typeof candidate === "string" && candidate.trim()) {
-          consumeVisibleText(candidate);
+          if (!appendLooseToolCall(candidate, "message_text_tool_call_")) {
+            consumeVisibleText(candidate);
+          }
           break;
         }
       }
@@ -1201,33 +1354,29 @@
     }
     consumeThinkTaggedText(thinkTagState, "", thinkTagHandlers, true);
     for (const toolCall of Array.isArray(message.tool_calls) ? message.tool_calls : []) {
-      const args = safeJsonParse(toolCall?.function?.arguments || "{}", {});
-      content.push({
-        type: "tool_use",
-        id: String(toolCall?.id || ""),
-        name: String(toolCall?.function?.name || ""),
-        input: args
-      });
+      const normalizedToolCall = parseInlineToolCallPayload(toolCall, "tool_call_" + inlineToolCallCount++);
+      if (!normalizedToolCall) {
+        continue;
+      }
+      content.push(createAnthropicToolUseBlock(normalizedToolCall));
       hasToolUse = true;
     }
     if (!hasToolUse && message.function_call) {
-      const args = message.function_call.arguments;
-      const input = typeof args === "string" ? safeJsonParse(args, {}) : args && typeof args === "object" ? args : {};
-      if (message.function_call.name || args != null) {
-        content.push({
-          type: "tool_use",
-          id: String(message.function_call.id || ""),
-          name: String(message.function_call.name || ""),
-          input
-        });
+      const normalizedToolCall = parseInlineToolCallPayload(message.function_call, "function_call_" + inlineToolCallCount++);
+      if (normalizedToolCall) {
+        content.push(createAnthropicToolUseBlock(normalizedToolCall));
         hasToolUse = true;
       }
     }
+    const promotedContent = promoteLooseToolCallTextBlocks(content, function () {
+      return "text_block_tool_call_" + inlineToolCallCount++;
+    });
+    hasToolUse = hasToolUse || promotedContent.convertedCount > 0;
     return {
       id: String(body?.id || ""),
       type: "message",
       role: "assistant",
-      content,
+      content: promotedContent.content,
       model: String(body?.model || ""),
       stop_reason: mapChatStopReason(choice.finish_reason, hasToolUse),
       stop_sequence: null,
@@ -1379,11 +1528,15 @@
         input: safeJsonParse(state.arguments || "{}", {})
       });
     }
+    const promotedContent = promoteLooseToolCallTextBlocks(content, function () {
+      return "stream_text_tool_call_" + inlineToolCallCount++;
+    });
+    hasToolUse = hasToolUse || promotedContent.convertedCount > 0;
     return {
       id: messageId,
       type: "message",
       role: "assistant",
-      content,
+      content: promotedContent.content,
       model: currentModel,
       stop_reason: mapChatStopReason(lastFinishReason, hasToolUse),
       stop_sequence: null,
@@ -1624,6 +1777,7 @@
     }
     const content = [];
     let hasToolUse = false;
+    let inlineToolCallCount = 0;
     for (const item of output) {
       const type = item?.type || "";
       if (type === "message") {
@@ -1663,7 +1817,13 @@
         for (const block of Array.isArray(item.content) ? item.content : []) {
           const blockType = block?.type || "";
           if (blockType === "output_text" && typeof block.text === "string" && block.text) {
-            consumeThinkTaggedText(thinkTagState, block.text, thinkTagHandlers, false);
+            const parsedToolCall = parseInlineToolCallPayload(block.text, "responses_text_tool_call_" + inlineToolCallCount++);
+            if (parsedToolCall) {
+              content.push(createAnthropicToolUseBlock(parsedToolCall));
+              hasToolUse = true;
+            } else {
+              consumeThinkTaggedText(thinkTagState, block.text, thinkTagHandlers, false);
+            }
           } else if (blockType === "refusal" && typeof block.refusal === "string" && block.refusal) {
             consumeThinkTaggedText(thinkTagState, block.refusal, thinkTagHandlers, false);
           }
@@ -1672,13 +1832,11 @@
         continue;
       }
       if (type === "function_call") {
-        content.push({
-          type: "tool_use",
-          id: String(item.call_id || ""),
-          name: String(item.name || ""),
-          input: safeJsonParse(item.arguments || "{}", {})
-        });
-        hasToolUse = true;
+        const normalizedToolCall = parseInlineToolCallPayload(item, "responses_function_call_" + inlineToolCallCount++);
+        if (normalizedToolCall) {
+          content.push(createAnthropicToolUseBlock(normalizedToolCall));
+          hasToolUse = true;
+        }
         continue;
       }
       if (type === "reasoning") {
@@ -1696,11 +1854,15 @@
         }
       }
     }
+    const promotedContent = promoteLooseToolCallTextBlocks(content, function () {
+      return "responses_block_tool_call_" + inlineToolCallCount++;
+    });
+    hasToolUse = hasToolUse || promotedContent.convertedCount > 0;
     return {
       id: String(body?.id || ""),
       type: "message",
       role: "assistant",
-      content,
+      content: promotedContent.content,
       model: String(body?.model || ""),
       stop_reason: mapResponsesStopReason(body?.status, hasToolUse, body?.incomplete_details?.reason),
       stop_sequence: null,
@@ -2644,6 +2806,7 @@
     return createAnthropicErrorResponse(parsed.status, parsed.message);
   }
   async function forwardProviderRequest(request, config) {
+    await assertHttpProviderAllowed(config);
     const bodyText = await request.clone().text();
     const body = safeJsonParse(bodyText, null);
     if (!body || typeof body !== "object") {

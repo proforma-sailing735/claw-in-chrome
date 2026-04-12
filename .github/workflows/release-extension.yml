@@ -7,6 +7,11 @@ name: Release Extension
     paths:
       - manifest.json
   workflow_dispatch:
+    inputs:
+      min_supported_version:
+        description: Optional minimum supported extension version (four numeric segments). Leave blank to avoid forcing an upgrade.
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -38,6 +43,13 @@ jobs:
             exit 1
           fi
 
+          RAW_MANUAL_MIN_SUPPORTED="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.min_supported_version || '' }}"
+          MANUAL_MIN_SUPPORTED="$(printf '%s' "${RAW_MANUAL_MIN_SUPPORTED}" | tr -d '\r' | xargs)"
+          if [[ -n "${MANUAL_MIN_SUPPORTED}" ]] && [[ ! "${MANUAL_MIN_SUPPORTED}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "min_supported_version must use four numeric segments, got: ${MANUAL_MIN_SUPPORTED}" >&2
+            exit 1
+          fi
+
           BEFORE_SHA="${{ github.event.before }}"
           PREVIOUS_VERSION=""
           if [[ -n "${BEFORE_SHA}" ]] && [[ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
@@ -53,7 +65,20 @@ jobs:
           fi
 
           TAG="v${VERSION}"
-          if [[ -n "${BEFORE_SHA}" ]] && [[ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+          PREVIOUS_TAG=""
+          if [[ -n "${PREVIOUS_VERSION}" ]]; then
+            CANDIDATE_PREVIOUS_TAG="v${PREVIOUS_VERSION}"
+            if git rev-parse -q --verify "refs/tags/${CANDIDATE_PREVIOUS_TAG}" >/dev/null; then
+              PREVIOUS_TAG="${CANDIDATE_PREVIOUS_TAG}"
+            fi
+          fi
+          if [[ -z "${PREVIOUS_TAG}" ]]; then
+            PREVIOUS_TAG="$(git tag --list 'v*' --sort=-version:refname | grep -Fvx "${TAG}" | head -n 1 || true)"
+          fi
+
+          if [[ -n "${PREVIOUS_TAG}" ]]; then
+            NOTES="$(git log --format='- %s' "${PREVIOUS_TAG}..HEAD")"
+          elif [[ -n "${BEFORE_SHA}" ]] && [[ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
             NOTES="$(git log --format='- %s' "${BEFORE_SHA}..HEAD")"
           else
             NOTES="$(git log --format='- %s' -n 20 HEAD)"
@@ -71,19 +96,23 @@ jobs:
 
           export RELEASE_VERSION="${VERSION}"
           export RELEASE_NOTES="${NOTES}"
+          export RELEASE_MIN_SUPPORTED_VERSION="${MANUAL_MIN_SUPPORTED}"
           export LATEST_JSON_PATH
           node <<'NODE'
           const fs = require("fs");
           const version = process.env.RELEASE_VERSION;
           const notes = process.env.RELEASE_NOTES || "";
+          const minSupportedVersion = String(process.env.RELEASE_MIN_SUPPORTED_VERSION || "").trim();
           const payload = {
             version,
             published_at: new Date().toISOString(),
             release_url: `https://github.com/S-Trespassing/claw-in-chrome/releases/tag/v${version}`,
             download_url: `https://github.com/S-Trespassing/claw-in-chrome/releases/download/v${version}/claw-in-chrome-v${version}.zip`,
-            notes,
-            min_supported_version: version
+            notes
           };
+          if (minSupportedVersion) {
+            payload.min_supported_version = minSupportedVersion;
+          }
           fs.writeFileSync(process.env.LATEST_JSON_PATH, JSON.stringify(payload, null, 2) + "\n");
           NODE
 
@@ -107,6 +136,7 @@ jobs:
             sounds
             blocked.html
             claude_icon.svg
+            claw-contract.js
             custom-provider-models.js
             custom-provider-settings.js
             gif.js
@@ -117,6 +147,7 @@ jobs:
             github-update-shared.js
             github-update-sidepanel.js
             github-update-worker.js
+            github-update-worker-runtime.js
             icon-128.png
             managed_schema.json
             manifest.json
@@ -124,8 +155,10 @@ jobs:
             offscreen.js
             options-debug-logger.js
             options.html
+            options-update-enhancer.js
             pairing.html
             provider-format-adapter.js
+            service-worker-runtime.js
             service-worker-loader.js
             sidepanel-debug-logger.js
             sidepanel-inline-provider.css

@@ -1,303 +1,25 @@
+import "./claw-contract.js";
+import "./custom-provider-models.js";
 import "./provider-format-adapter.js";
 import "./assets/service-worker.ts-H0DVM1LS.js";
 import "./github-update-shared.js";
 import "./github-update-worker.js";
+import "./service-worker-runtime.js";
 
-const CHAT_SCOPE_PREFIX = "claw.chat.scopes.";
-const CHAT_CLEANUP_AUDIT_KEY = "claw.chat.cleanup.audit";
-const CHAT_CLEANUP_AUDIT_LIMIT = 40;
-
-const normalizeStorageScopeId = value => typeof value === "string" ? value.trim() : "";
-
-const extractScopeIdFromStorageKey = key => {
-  const rawKey = String(key || "");
-  if (!rawKey.startsWith(CHAT_SCOPE_PREFIX)) {
-    return "";
-  }
-  const suffix = rawKey.slice(CHAT_SCOPE_PREFIX.length);
-  const separatorIndex = suffix.indexOf(".");
-  return separatorIndex > 0 ? suffix.slice(0, separatorIndex) : "";
-};
-
-const getGroupIdFromScopeId = scopeId => {
-  const normalizedScopeId = normalizeStorageScopeId(scopeId);
-  if (!normalizedScopeId.startsWith("chrome-group:")) {
-    return null;
-  }
-  const groupId = Number(normalizedScopeId.slice("chrome-group:".length));
-  return Number.isFinite(groupId) && groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE ? groupId : null;
-};
-
-const isChromeGroupScopeId = scopeId => normalizeStorageScopeId(scopeId).startsWith("chrome-group:");
-
-const getMainTabIdFromScopeId = scopeId => {
-  const normalizedScopeId = normalizeStorageScopeId(scopeId);
-  if (!normalizedScopeId.startsWith("group:")) {
-    return null;
-  }
-  const mainTabId = Number(normalizedScopeId.slice("group:".length));
-  return Number.isFinite(mainTabId) && mainTabId > 0 ? mainTabId : null;
-};
-
-const collectGroupIdsFromStorageValue = value => {
-  const groupIds = new Set();
-  const addGroupId = candidate => {
-    const groupId = Number(candidate);
-    if (Number.isFinite(groupId) && groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
-      groupIds.add(groupId);
-    }
-  };
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      addGroupId(item?.chromeGroupId);
-    }
-    return groupIds;
-  }
-
-  if (value && typeof value === "object") {
-    addGroupId(value.chromeGroupId);
-    addGroupId(value?.meta?.chromeGroupId);
-  }
-
-  return groupIds;
-};
-
-const collectMainTabIdsFromStorageValue = value => {
-  const mainTabIds = new Set();
-  const addMainTabId = candidate => {
-    const mainTabId = Number(candidate);
-    if (Number.isFinite(mainTabId) && mainTabId > 0) {
-      mainTabIds.add(mainTabId);
-    }
-  };
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      addMainTabId(item?.mainTabId);
-    }
-    return mainTabIds;
-  }
-
-  if (value && typeof value === "object") {
-    addMainTabId(value.mainTabId);
-    addMainTabId(value?.meta?.mainTabId);
-  }
-
-  return mainTabIds;
-};
-
-const collectStoredScopeEntries = storageSnapshot => {
-  const scopeEntries = new Map();
-  for (const [storageKey, storageValue] of Object.entries(storageSnapshot || {})) {
-    const scopeId = extractScopeIdFromStorageKey(storageKey);
-    if (!scopeId) {
-      continue;
-    }
-    if (!scopeEntries.has(scopeId)) {
-      scopeEntries.set(scopeId, {
-        keys: [],
-        groupIds: new Set(),
-        mainTabIds: new Set()
-      });
-    }
-    const entry = scopeEntries.get(scopeId);
-    entry.keys.push(storageKey);
-    const scopeGroupId = getGroupIdFromScopeId(scopeId);
-    if (scopeGroupId !== null) {
-      entry.groupIds.add(scopeGroupId);
-    }
-    const scopeMainTabId = getMainTabIdFromScopeId(scopeId);
-    if (scopeMainTabId !== null) {
-      entry.mainTabIds.add(scopeMainTabId);
-    }
-    for (const groupId of collectGroupIdsFromStorageValue(storageValue)) {
-      entry.groupIds.add(groupId);
-    }
-    for (const mainTabId of collectMainTabIdsFromStorageValue(storageValue)) {
-      entry.mainTabIds.add(mainTabId);
-    }
-  }
-  return scopeEntries;
-};
-
-const findScopeIdsByGroupId = (scopeEntries, groupId) => {
-  const matchedScopeIds = [];
-  for (const [scopeId, entry] of scopeEntries.entries()) {
-    if (entry.groupIds.has(groupId)) {
-      matchedScopeIds.push(scopeId);
-    }
-  }
-  return matchedScopeIds;
-};
-
-const appendCleanupAudit = async (type, payload = {}) => {
-  try {
-    const existing = await chrome.storage.local.get(CHAT_CLEANUP_AUDIT_KEY);
-    const currentItems = Array.isArray(existing[CHAT_CLEANUP_AUDIT_KEY]) ? existing[CHAT_CLEANUP_AUDIT_KEY] : [];
-    const nextItems = [...currentItems, {
-      ts: new Date().toISOString(),
-      type,
-      payload
-    }].slice(-CHAT_CLEANUP_AUDIT_LIMIT);
-    await chrome.storage.local.set({
-      [CHAT_CLEANUP_AUDIT_KEY]: nextItems
-    });
-  } catch {}
-};
-
-const removeScopeEntries = async (scopeIds, storageSnapshot = null) => {
-  const normalizedScopeIds = [...new Set((Array.isArray(scopeIds) ? scopeIds : []).map(normalizeStorageScopeId).filter(Boolean))];
-  if (normalizedScopeIds.length === 0) {
-    return {
-      removedScopeIds: [],
-      removedKeyCount: 0
-    };
-  }
-
-  const scopeIdSet = new Set(normalizedScopeIds);
-  const snapshot = storageSnapshot ?? await chrome.storage.local.get(null);
-  const keysToRemove = [];
-  for (const storageKey of Object.keys(snapshot)) {
-    const scopeId = extractScopeIdFromStorageKey(storageKey);
-    if (scopeId && scopeIdSet.has(scopeId)) {
-      keysToRemove.push(storageKey);
-    }
-  }
-
-  if (keysToRemove.length > 0) {
-    await chrome.storage.local.remove(keysToRemove);
-  }
-
-  console.debug("[session-cleanup] removed scopes", {
-    scopeIds: normalizedScopeIds,
-    removedKeyCount: keysToRemove.length
-  });
-  await appendCleanupAudit("removed_scopes", {
-    scopeIds: normalizedScopeIds,
-    removedKeyCount: keysToRemove.length
-  });
-
-  return {
-    removedScopeIds: normalizedScopeIds,
-    removedKeyCount: keysToRemove.length
-  };
-};
-
-const cleanupClosedGroupScopes = async groupIdValue => {
-  const groupId = Number(groupIdValue);
-  if (!Number.isFinite(groupId) || groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
-    return {
-      removedScopeIds: [],
-      removedKeyCount: 0
-    };
-  }
-
-  const storageSnapshot = await chrome.storage.local.get(null);
-  const scopeEntries = collectStoredScopeEntries(storageSnapshot);
-  const scopeIds = findScopeIdsByGroupId(scopeEntries, groupId);
-
-  if (scopeIds.length === 0) {
-    console.debug("[session-cleanup] no scopes matched closed group", {
-      groupId
-    });
-    await appendCleanupAudit("closed_group_no_match", {
-      groupId
-    });
-    return {
-      removedScopeIds: [],
-      removedKeyCount: 0
-    };
-  }
-
-  const relatedMainTabIds = new Set();
-  for (const scopeId of scopeIds) {
-    const entry = scopeEntries.get(scopeId);
-    if (!entry) {
-      continue;
-    }
-    for (const mainTabId of entry.mainTabIds) {
-      relatedMainTabIds.add(mainTabId);
-    }
-  }
-
-  const relatedScopeIds = new Set(scopeIds);
-  if (relatedMainTabIds.size > 0) {
-    for (const [scopeId, entry] of scopeEntries.entries()) {
-      if ([...entry.mainTabIds].some(mainTabId => relatedMainTabIds.has(mainTabId))) {
-        relatedScopeIds.add(scopeId);
-      }
-    }
-  }
-
-  return removeScopeEntries([...relatedScopeIds], storageSnapshot);
-};
-
-const canResolveTabGroup = async groupId => {
-  if (typeof chrome.tabGroups?.get !== "function") {
-    return false;
-  }
-  try {
-    await chrome.tabGroups.get(groupId);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const cleanupOrphanGroupScopes = async () => {
-  const storageSnapshot = await chrome.storage.local.get(null);
-  const scopeEntries = collectStoredScopeEntries(storageSnapshot);
-  const candidateGroupIds = new Set();
-
-  for (const entry of scopeEntries.values()) {
-    for (const groupId of entry.groupIds) {
-      candidateGroupIds.add(groupId);
-    }
-  }
-
-  if (candidateGroupIds.size === 0) {
-    await appendCleanupAudit("orphan_scan_no_groups", {});
-    return {
-      removedScopeIds: [],
-      removedKeyCount: 0
-    };
-  }
-
-  const orphanScopeIds = new Set();
-  for (const groupId of candidateGroupIds) {
-    const exists = await canResolveTabGroup(groupId);
-    if (!exists) {
-      for (const scopeId of findScopeIdsByGroupId(scopeEntries, groupId)) {
-        if (isChromeGroupScopeId(scopeId)) {
-          orphanScopeIds.add(scopeId);
-        }
-      }
-    }
-  }
-
-  if (orphanScopeIds.size === 0) {
-    console.debug("[session-cleanup] orphan scope scan found nothing to remove");
-    await appendCleanupAudit("orphan_scan_noop", {
-      groupIds: [...candidateGroupIds]
-    });
-    return {
-      removedScopeIds: [],
-      removedKeyCount: 0
-    };
-  }
-
-  return removeScopeEntries([...orphanScopeIds], storageSnapshot);
-};
+const serviceWorkerRuntimeApi = globalThis.__CP_SERVICE_WORKER_RUNTIME__;
+const detachedWindowContract = globalThis.__CP_CONTRACT__?.detachedWindow || {};
+const detachedWindowDefaultSize = detachedWindowContract.DEFAULT_SIZE && typeof detachedWindowContract.DEFAULT_SIZE === "object"
+  ? detachedWindowContract.DEFAULT_SIZE
+  : {};
 
 const DETACHED_WINDOW_SIZE = Object.freeze({
-  width: 500,
-  height: 768,
-  left: 100,
-  top: 100
+  width: Number.isFinite(Number(detachedWindowDefaultSize.width)) ? Math.trunc(Number(detachedWindowDefaultSize.width)) : 500,
+  height: Number.isFinite(Number(detachedWindowDefaultSize.height)) ? Math.trunc(Number(detachedWindowDefaultSize.height)) : 768,
+  left: Number.isFinite(Number(detachedWindowDefaultSize.left)) ? Math.trunc(Number(detachedWindowDefaultSize.left)) : 100,
+  top: Number.isFinite(Number(detachedWindowDefaultSize.top)) ? Math.trunc(Number(detachedWindowDefaultSize.top)) : 100
 });
-const DETACHED_WINDOW_LOCKS_KEY = "claw.detachedWindowLocks";
-const DETACHED_WINDOW_PAGE_PATH = "sidepanel.html";
+const DETACHED_WINDOW_LOCKS_KEY = detachedWindowContract.LOCKS_STORAGE_KEY || "claw.detachedWindowLocks";
+const DETACHED_WINDOW_PAGE_PATH = detachedWindowContract.PAGE_PATH || "sidepanel.html";
 const DETACHED_WINDOW_PAGE_URL = chrome.runtime.getURL(DETACHED_WINDOW_PAGE_PATH);
 const DETACHED_WINDOW_PAGE_META = new URL(DETACHED_WINDOW_PAGE_URL);
 
@@ -640,82 +362,16 @@ const clearUninstallUrl = async () => {
   } catch {}
 };
 
-const runBackgroundMaintenance = async () => {
-  await clearUninstallUrl();
-  await cleanupOrphanGroupScopes();
-  await sweepDetachedWindowLocks();
-};
-
-clearUninstallUrl();
-
-chrome.runtime.onInstalled.addListener(() => {
-  runBackgroundMaintenance();
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  runBackgroundMaintenance();
-});
-
-chrome.tabGroups?.onRemoved?.addListener(group => {
-  cleanupClosedGroupScopes(group?.id).catch(error => {
-    console.warn("[session-cleanup] closed group cleanup failed", error);
-    appendCleanupAudit("closed_group_failed", {
-      groupId: Number(group?.id),
-      message: error instanceof Error ? error.message : String(error || "")
-    });
+if (serviceWorkerRuntimeApi) {
+  serviceWorkerRuntimeApi.registerServiceWorkerRuntimeHandlers({
+    chrome,
+    console,
+    clearUninstallUrl,
+    sweepDetachedWindowLocks,
+    readDetachedWindowLocks,
+    closeDetachedWindowForLockEntry,
+    removeDetachedWindowLockByWindowId,
+    openDetachedWindowForGroup,
+    normalizePositiveNumber
   });
-});
-
-chrome.windows?.onRemoved?.addListener(windowId => {
-  (async () => {
-    const locks = await readDetachedWindowLocks();
-    const hostWindowLocks = Object.values(locks).filter(lockEntry => lockEntry?.hostWindowId === normalizePositiveNumber(windowId) && lockEntry?.windowId !== normalizePositiveNumber(windowId));
-    for (const lockEntry of hostWindowLocks) {
-      await closeDetachedWindowForLockEntry(lockEntry);
-    }
-    await removeDetachedWindowLockByWindowId(windowId);
-  })().catch(error => {
-    console.warn("[detached-window] failed to cleanup popup lock", {
-      windowId,
-      message: error instanceof Error ? error.message : String(error || "")
-    });
-  });
-});
-
-chrome.tabs?.onRemoved?.addListener(tabId => {
-  (async () => {
-    const locks = await readDetachedWindowLocks();
-    for (const lockEntry of Object.values(locks)) {
-      if (lockEntry?.mainTabId !== normalizePositiveNumber(tabId)) {
-        continue;
-      }
-      await closeDetachedWindowForLockEntry(lockEntry);
-    }
-  })().catch(error => {
-    console.warn("[detached-window] failed to cleanup popup after main tab removed", {
-      tabId,
-      message: error instanceof Error ? error.message : String(error || "")
-    });
-  });
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "OPEN_GROUP_DETACHED_WINDOW") {
-    return false;
-  }
-
-  openDetachedWindowForGroup({
-    ...message,
-    tabId: normalizePositiveNumber(message?.tabId) ?? normalizePositiveNumber(sender?.tab?.id),
-    mainTabId: normalizePositiveNumber(message?.mainTabId)
-  }).then(result => {
-    sendResponse(result);
-  }).catch(error => {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : String(error || "Unknown detached window error")
-    });
-  });
-
-  return true;
-});
+}

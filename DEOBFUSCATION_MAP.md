@@ -52,6 +52,11 @@
 
 ## 页面与壳层
 
+- `claw-contract.js`
+  - 当前恢复层的稳定接口契约。
+  - 统一收口关键 `storage key`、会话前缀、独立窗口消息类型。
+  - 后续新增外提模块时，优先从这里取常量，避免键名继续散落。
+
 - `sidepanel.html`
   - 侧栏页面入口，负责挂载主 bundle 和调试脚本。
 
@@ -65,6 +70,9 @@
 
 - 先继续拆 `assets/sidepanel-BoLm9pmH.js`
   - 可按“模型 / 权限 / 聊天初始化”三块继续做语义注释。
+
+- 同步维护 `docs/maintainability-boundaries.md`
+  - 把“哪些接口冻结、哪些区域允许外提”写清楚，避免恢复过程中反复漂移。
 
 - 再处理 `assets/service-worker.ts-H0DVM1LS.js`
   - 适合把消息类型按“面板 / OAuth / 通知 / MCP”分类补注释。

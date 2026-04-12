@@ -1,4 +1,5 @@
 (function () {
+  const contract = globalThis.__CP_CONTRACT__?.customProvider || {};
   const ANTHROPIC_FORMAT = "anthropic";
   const OPENAI_CHAT_FORMAT = "openai_chat";
   const OPENAI_RESPONSES_FORMAT = "openai_responses";
@@ -8,16 +9,19 @@
   const MIN_CONTEXT_WINDOW = 20000;
   const FETCH_TIMEOUT_MS = 15000;
   const REASONING_EFFORT_VALUES = ["none", "low", "medium", "high", "max"];
-  const LEGACY_STORAGE_KEY = "customProviderConfig";
-  const PROFILES_STORAGE_KEY = "customProviderProfiles";
-  const ACTIVE_PROFILE_STORAGE_KEY = "customProviderActiveProfileId";
-  const BACKUP_KEY = "customProviderOriginalApiKey";
-  const ANTHROPIC_API_KEY_STORAGE_KEY = "anthropicApiKey";
-  const FETCHED_MODELS_CACHE_KEY = "customProviderFetchedModelsCache";
-  const SELECTED_MODEL_STORAGE_KEY = "selectedModel";
-  const SELECTED_MODEL_QUICK_MODE_STORAGE_KEY = "selectedModelQuickMode";
-  const MODEL_SELECTION_SYNC_SIGNATURE_KEY = "customProviderSelectedModelSyncSignature";
-  const QUICK_MODEL_SELECTION_SYNC_SIGNATURE_KEY = "customProviderSelectedModelQuickModeSyncSignature";
+  const LEGACY_STORAGE_KEY = contract.STORAGE_KEY || "customProviderConfig";
+  const PROFILES_STORAGE_KEY = contract.PROFILES_STORAGE_KEY || "customProviderProfiles";
+  const ACTIVE_PROFILE_STORAGE_KEY = contract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
+  const BACKUP_KEY = contract.BACKUP_KEY || "customProviderOriginalApiKey";
+  const ANTHROPIC_API_KEY_STORAGE_KEY = contract.ANTHROPIC_API_KEY_STORAGE_KEY || "anthropicApiKey";
+  const FETCHED_MODELS_CACHE_KEY = contract.FETCHED_MODELS_CACHE_KEY || "customProviderFetchedModelsCache";
+  const SELECTED_MODEL_STORAGE_KEY = contract.SELECTED_MODEL_STORAGE_KEY || "selectedModel";
+  const SELECTED_MODEL_QUICK_MODE_STORAGE_KEY = contract.SELECTED_MODEL_QUICK_MODE_STORAGE_KEY || "selectedModelQuickMode";
+  const MODEL_SELECTION_SYNC_SIGNATURE_KEY = contract.MODEL_SELECTION_SYNC_SIGNATURE_KEY || "customProviderSelectedModelSyncSignature";
+  const QUICK_MODEL_SELECTION_SYNC_SIGNATURE_KEY = contract.QUICK_MODEL_SELECTION_SYNC_SIGNATURE_KEY || "customProviderSelectedModelQuickModeSyncSignature";
+  const HTTP_PROVIDER_STORAGE_KEY = contract.HTTP_PROVIDER_STORAGE_KEY || "customProviderAllowHttp";
+  const HTTP_PROVIDER_MIGRATED_KEY = contract.HTTP_PROVIDER_MIGRATED_KEY || "customProviderAllowHttpMigrated";
+  const HTTP_PROVIDER_DISABLED_MESSAGE = "HTTP Base URL 未启用。请前往 Options 打开“允许 HTTP Base URL”后再使用 http:// 地址。";
   const FETCHED_MODELS_CACHE_LIMIT = 24;
   const HEALTH_CHECK_PROMPT = "Reply with OK only.";
   const HEALTH_CHECK_MAX_TOKENS = 64;
@@ -85,6 +89,17 @@
       contextWindow: normalizeContextWindow(source.contextWindow),
       fetchedModels: normalizeFetchedModels(source.fetchedModels)
     };
+  }
+  function isHttpBaseUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return false;
+    }
+    try {
+      return String(new URL(raw).protocol || "").toLowerCase() === "http:";
+    } catch {
+      return /^http:\/\//i.test(raw);
+    }
   }
   function createEmptyConfig() {
     return {
@@ -333,6 +348,65 @@
       fetchedModels: normalizeFetchedModels(profile.fetchedModels)
     };
   }
+  function hasLegacyActiveHttpProvider(stored) {
+    const source = stored && typeof stored === "object" ? stored : {};
+    const profiles = Array.isArray(source[PROFILES_STORAGE_KEY]) ? source[PROFILES_STORAGE_KEY].map(normalizeProfile) : [];
+    const activeProfileId = resolveActiveProfileId(profiles, source[ACTIVE_PROFILE_STORAGE_KEY]);
+    const activeProfile = profiles.find(function (profile) {
+      return profile.id === activeProfileId;
+    }) || null;
+    if (isHttpBaseUrl(activeProfile?.baseUrl)) {
+      return true;
+    }
+    return isHttpBaseUrl(source[LEGACY_STORAGE_KEY]?.baseUrl);
+  }
+  async function ensureHttpProviderSupportMigration(storage, stored) {
+    if (!storage) {
+      return false;
+    }
+    const snapshot = stored && typeof stored === "object" ? stored : await storage.get([HTTP_PROVIDER_STORAGE_KEY, HTTP_PROVIDER_MIGRATED_KEY, LEGACY_STORAGE_KEY, PROFILES_STORAGE_KEY, ACTIVE_PROFILE_STORAGE_KEY]);
+    if (typeof snapshot[HTTP_PROVIDER_STORAGE_KEY] === "boolean") {
+      return snapshot[HTTP_PROVIDER_STORAGE_KEY];
+    }
+    if (snapshot[HTTP_PROVIDER_MIGRATED_KEY] === true) {
+      return false;
+    }
+    const shouldEnable = hasLegacyActiveHttpProvider(snapshot);
+    const payload = {
+      [HTTP_PROVIDER_MIGRATED_KEY]: true
+    };
+    if (shouldEnable) {
+      payload[HTTP_PROVIDER_STORAGE_KEY] = true;
+    }
+    await storage.set(payload);
+    return shouldEnable;
+  }
+  async function readHttpProviderSupportEnabled(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    if (typeof settings.enabled === "boolean") {
+      return settings.enabled;
+    }
+    const storage = settings.storageArea || globalThis.chrome?.storage?.local;
+    if (!storage) {
+      return false;
+    }
+    const stored = settings.storedState && typeof settings.storedState === "object" ? settings.storedState : null;
+    if (stored && typeof stored[HTTP_PROVIDER_STORAGE_KEY] === "boolean") {
+      return stored[HTTP_PROVIDER_STORAGE_KEY];
+    }
+    return ensureHttpProviderSupportMigration(storage, stored);
+  }
+  async function assertHttpProviderAllowed(config, options) {
+    const next = normalizeConfig(config);
+    if (!next.baseUrl || !isHttpBaseUrl(next.baseUrl)) {
+      return next;
+    }
+    const enabled = await readHttpProviderSupportEnabled(options);
+    if (!enabled) {
+      throw new Error(HTTP_PROVIDER_DISABLED_MESSAGE);
+    }
+    return next;
+  }
   function resolveActiveProfileId(profiles, requestedId) {
     const normalizedRequestedId = String(requestedId || "").trim();
     if (normalizedRequestedId && profiles.some(function (profile) {
@@ -437,7 +511,10 @@
       config: legacyConfig,
       originalApiKey: state.originalApiKey === undefined ? state.currentApiKey && state.currentApiKey !== activeProfile?.apiKey ? state.currentApiKey : null : state.originalApiKey,
       currentApiKey: "",
-      migrated: !!state.migrated
+      migrated: !!state.migrated,
+      httpEnabled: typeof state.httpEnabled === "boolean" ? state.httpEnabled : await readHttpProviderSupportEnabled({
+        storageArea: storage
+      })
     };
   }
   async function readProviderStoreState(options) {
@@ -452,10 +529,11 @@
         config: emptyConfig,
         originalApiKey: undefined,
         currentApiKey: "",
-        migrated: false
+        migrated: false,
+        httpEnabled: false
       };
     }
-    const stored = await storage.get([LEGACY_STORAGE_KEY, PROFILES_STORAGE_KEY, ACTIVE_PROFILE_STORAGE_KEY, BACKUP_KEY, ANTHROPIC_API_KEY_STORAGE_KEY]);
+    const stored = await storage.get([LEGACY_STORAGE_KEY, PROFILES_STORAGE_KEY, ACTIVE_PROFILE_STORAGE_KEY, BACKUP_KEY, ANTHROPIC_API_KEY_STORAGE_KEY, HTTP_PROVIDER_STORAGE_KEY, HTTP_PROVIDER_MIGRATED_KEY]);
     let profiles = Array.isArray(stored[PROFILES_STORAGE_KEY]) ? stored[PROFILES_STORAGE_KEY].map(normalizeProfile) : [];
     let activeProfileId = resolveActiveProfileId(profiles, stored[ACTIVE_PROFILE_STORAGE_KEY]);
     let migrated = false;
@@ -472,6 +550,10 @@
       return profile.id === activeProfileId;
     }) || null;
     const legacyConfig = projectProfileToConfig(activeProfile);
+    const httpEnabled = await readHttpProviderSupportEnabled({
+      storageArea: storage,
+      storedState: stored
+    });
     const needsSync = migrated || hasLegacyDeprecatedFields || hasProfileDeprecatedFields || stableSerialize(legacyConfig) !== stableSerialize(normalizeConfig(stored[LEGACY_STORAGE_KEY])) || stored[ACTIVE_PROFILE_STORAGE_KEY] !== activeProfileId;
     if (needsSync && settings.persist !== false) {
       return persistProviderStoreState({
@@ -480,7 +562,8 @@
         activeProfileId,
         originalApiKey: Object.prototype.hasOwnProperty.call(stored, BACKUP_KEY) ? stored[BACKUP_KEY] : undefined,
         currentApiKey: stored[ANTHROPIC_API_KEY_STORAGE_KEY] || "",
-        migrated
+        migrated,
+        httpEnabled
       });
     }
     return {
@@ -490,7 +573,8 @@
       config: legacyConfig,
       originalApiKey: Object.prototype.hasOwnProperty.call(stored, BACKUP_KEY) ? stored[BACKUP_KEY] : undefined,
       currentApiKey: stored[ANTHROPIC_API_KEY_STORAGE_KEY] || "",
-      migrated
+      migrated,
+      httpEnabled
     };
   }
   async function saveProviderProfile(profileInput, options) {
@@ -502,6 +586,10 @@
     const nextProfile = normalizeProfile({
       ...incoming,
       id: settings.profileId || incoming.id || ""
+    });
+    await assertHttpProviderAllowed(nextProfile, {
+      storageArea: settings.storageArea,
+      enabled: typeof currentState.httpEnabled === "boolean" ? currentState.httpEnabled : undefined
     });
     const profiles = currentState.profiles.slice();
     const existingIndex = profiles.findIndex(function (profile) {
@@ -522,7 +610,8 @@
       activeProfileId: shouldActivate ? nextProfile.id : currentState.activeProfileId,
       modelSelectionSyncPayload: buildModelSelectionSyncPayload(currentState.activeProfile, nextActiveProfile),
       originalApiKey: currentState.originalApiKey,
-      currentApiKey: currentState.currentApiKey
+      currentApiKey: currentState.currentApiKey,
+      httpEnabled: currentState.httpEnabled
     });
   }
   async function setActiveProviderProfile(profileId, options) {
@@ -538,13 +627,18 @@
     const nextActiveProfile = currentState.profiles.find(function (profile) {
       return profile.id === profileId;
     }) || null;
+    await assertHttpProviderAllowed(nextActiveProfile, {
+      storageArea: settings.storageArea,
+      enabled: typeof currentState.httpEnabled === "boolean" ? currentState.httpEnabled : undefined
+    });
     return persistProviderStoreState({
       storageArea: settings.storageArea,
       profiles: currentState.profiles,
       activeProfileId: profileId,
       modelSelectionSyncPayload: buildModelSelectionSyncPayload(currentState.activeProfile, nextActiveProfile),
       originalApiKey: currentState.originalApiKey,
-      currentApiKey: currentState.currentApiKey
+      currentApiKey: currentState.currentApiKey,
+      httpEnabled: currentState.httpEnabled
     });
   }
   async function deleteProviderProfile(profileId, options) {
@@ -565,7 +659,8 @@
       activeProfileId,
       modelSelectionSyncPayload: buildModelSelectionSyncPayload(currentState.activeProfile, nextActiveProfile),
       originalApiKey: currentState.originalApiKey,
-      currentApiKey: currentState.currentApiKey
+      currentApiKey: currentState.currentApiKey,
+      httpEnabled: currentState.httpEnabled
     });
   }
   async function reconcileActiveProviderModelSelection(options) {
@@ -840,6 +935,7 @@
     if (!next.baseUrl) {
       throw new Error("请先填写 Base URL。");
     }
+    await assertHttpProviderAllowed(next, options);
     if (!next.apiKey) {
       throw new Error("请先填写 API Key。");
     }
@@ -884,6 +980,7 @@
     if (!next.baseUrl) {
       throw new Error("请先填写 Base URL。");
     }
+    await assertHttpProviderAllowed(next, options);
     if (!next.apiKey) {
       throw new Error("请先填写 API Key。");
     }
@@ -949,7 +1046,7 @@
     for (const model of models) {
       const option = document.createElement("option");
       option.value = model.value;
-      option.textContent = model.label && model.label !== model.value ? `${model.label} (${model.value})` : model.value;
+      option.textContent = model.label || model.value;
       select.appendChild(option);
     }
     select.disabled = models.length === 0;
@@ -972,6 +1069,9 @@
     BACKUP_KEY,
     ANTHROPIC_API_KEY_STORAGE_KEY,
     FETCHED_MODELS_CACHE_KEY,
+    HTTP_PROVIDER_STORAGE_KEY,
+    HTTP_PROVIDER_MIGRATED_KEY,
+    HTTP_PROVIDER_DISABLED_MESSAGE,
     extractErrorMessage,
     normalizeFormat,
     normalizeReasoningEffort,
@@ -980,6 +1080,9 @@
     normalizeConfig,
     normalizeProfile,
     createEmptyConfig,
+    isHttpBaseUrl,
+    readHttpProviderSupportEnabled,
+    assertHttpProviderAllowed,
     hasUsableConfig,
     projectProfileToConfig,
     readProviderStoreState,

@@ -50,6 +50,32 @@
 
 ![模型供应商配置页](./docs/screenshots/02.png)
 
+## 4. 测试
+
+首次执行：
+
+```bash
+npm install
+```
+
+常用命令：
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+npm test
+```
+
+说明：
+
+- `test:unit` 只跑纯逻辑回归
+- `test:integration` 跑 fake `chrome` 环境集成测试
+- `test:e2e` 默认启动 Playwright 自带 Chromium，加载当前扩展目录做冒烟验证
+- `npm test` 会按 `unit -> integration -> e2e` 全量执行
+
+如果你想强制使用本机 Chrome/Edge，也可以先设置环境变量 `CLAW_E2E_BROWSER_PATH`
+
 
 ## Star 历史
 

@@ -48,6 +48,32 @@ After that, click `Save and apply`, then close and reopen the side panel. Once t
 
 ![Provider settings](./docs/screenshots/05.png)
 
+## 4. Testing
+
+Install dependencies first:
+
+```bash
+npm install
+```
+
+Common commands:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+npm test
+```
+
+Notes:
+
+- `test:unit` runs pure logic regression tests
+- `test:integration` runs integration tests with a fake `chrome` runtime
+- `test:e2e` launches Playwright's bundled Chromium by default and loads this unpacked extension for smoke checks
+- `npm test` runs the full flow in order: `unit -> integration -> e2e`
+
+If you want to force a local Chrome/Edge binary instead, set `CLAW_E2E_BROWSER_PATH` first.
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=S-Trespassing%2Fclaw-in-chrome&type=date&legend=top-left">

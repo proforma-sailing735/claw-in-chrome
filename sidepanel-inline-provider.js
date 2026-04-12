@@ -1,10 +1,12 @@
 (function () {
-  const STORAGE_KEY = "customProviderConfig";
-  const BACKUP_KEY = "customProviderOriginalApiKey";
+  const providerContract = globalThis.__CP_CONTRACT__?.customProvider || {};
+  const STORAGE_KEY = providerContract.STORAGE_KEY || "customProviderConfig";
+  const BACKUP_KEY = providerContract.BACKUP_KEY || "customProviderOriginalApiKey";
+  const ANTHROPIC_API_KEY_STORAGE_KEY = providerContract.ANTHROPIC_API_KEY_STORAGE_KEY || "anthropicApiKey";
   const ROOT_ID = "cp-inline-provider-root";
   const helpers = globalThis.CustomProviderModels || {};
-  const PROFILES_STORAGE_KEY = helpers.PROFILES_STORAGE_KEY || "customProviderProfiles";
-  const ACTIVE_PROFILE_STORAGE_KEY = helpers.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
+  const PROFILES_STORAGE_KEY = helpers.PROFILES_STORAGE_KEY || providerContract.PROFILES_STORAGE_KEY || "customProviderProfiles";
+  const ACTIVE_PROFILE_STORAGE_KEY = helpers.ACTIVE_PROFILE_STORAGE_KEY || providerContract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
   const DEFAULT_FORMAT = helpers.DEFAULT_FORMAT || "anthropic";
   const DEFAULT_CONTEXT_WINDOW = helpers.DEFAULT_CONTEXT_WINDOW || 200000;
   const DEFAULT_MAX_OUTPUT_TOKENS = helpers.DEFAULT_MAX_OUTPUT_TOKENS || 10000;
@@ -13,7 +15,7 @@
     return !!(config?.baseUrl && config?.apiKey && config?.defaultModel);
   };
   const readProviderStoreState = helpers.readProviderStoreState || async function () {
-    const stored = await chrome.storage.local.get([STORAGE_KEY, BACKUP_KEY, "anthropicApiKey"]);
+    const stored = await chrome.storage.local.get([STORAGE_KEY, BACKUP_KEY, ANTHROPIC_API_KEY_STORAGE_KEY]);
     return {
       profiles: [],
       activeProfileId: null,
@@ -31,7 +33,7 @@
         fetchedModels: []
       },
       originalApiKey: Object.prototype.hasOwnProperty.call(stored, BACKUP_KEY) ? stored[BACKUP_KEY] : undefined,
-      currentApiKey: stored.anthropicApiKey || ""
+      currentApiKey: stored[ANTHROPIC_API_KEY_STORAGE_KEY] || ""
     };
   };
   const saveProviderProfile = helpers.saveProviderProfile || async function (next) {
@@ -584,7 +586,7 @@
       if (areaName !== "local") {
         return;
       }
-      if (changes[STORAGE_KEY] || changes[PROFILES_STORAGE_KEY] || changes[ACTIVE_PROFILE_STORAGE_KEY] || changes.anthropicApiKey || changes[BACKUP_KEY]) {
+      if (changes[STORAGE_KEY] || changes[PROFILES_STORAGE_KEY] || changes[ACTIVE_PROFILE_STORAGE_KEY] || changes[ANTHROPIC_API_KEY_STORAGE_KEY] || changes[BACKUP_KEY]) {
         const syncTask = isOverlayVisible ? refreshForm() : refreshStoredState();
         syncTask.catch(function () {}).finally(function () {
           syncVisibility();

@@ -38107,37 +38107,10 @@ const OA = ({
     isAuthenticated: i,
     isLoading: s
   } = EA();
-  const u = function () {
-    const [t, n] = e.useState({
-      forceLoginOrgUUIDs: null,
-      isLoading: true
-    });
-    e.useEffect(() => {
-      const e = async () => {
-        try {
-          const e = await chrome.storage.managed.get("forceLoginOrgUUID");
-          n({
-            forceLoginOrgUUIDs: kA(e.forceLoginOrgUUID),
-            isLoading: false
-          });
-        } catch {
-          n({
-            forceLoginOrgUUIDs: null,
-            isLoading: false
-          });
-        }
-      };
-      e();
-      const t = (t, n) => {
-        if (n === "managed") {
-          e();
-        }
-      };
-      chrome.storage.onChanged.addListener(t);
-      return () => chrome.storage.onChanged.removeListener(t);
-    }, []);
-    return t;
-  }();
+  const u = {
+    forceLoginOrgUUIDs: null,
+    isLoading: false
+  };
   e.useEffect(() => {
     if (i && a && o) {
       o.identify(a.account.uuid, {

@@ -695,15 +695,13 @@ const cpGithubUpdateSection = () => {
     })
   });
 };
-const J = ({
-  subview: a
-}) => {
-  const [e, r] = s.useState();
+const cpKeyboardShortcutCard = () => {
+  const [e, a] = s.useState();
   s.useEffect(() => {
     const e = () => {
       chrome.commands.getAll(e => {
         const t = e.find(e => e.name === "toggle-side-panel");
-        r(t?.shortcut);
+        a(t?.shortcut);
       });
     };
     e();
@@ -715,6 +713,66 @@ const J = ({
     document.addEventListener("visibilitychange", t);
     return () => document.removeEventListener("visibilitychange", t);
   }, []);
+  return n.jsxs("div", {
+    className: "bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8",
+    children: [n.jsx("h3", {
+      className: "text-text-100 font-xl-bold",
+      children: n.jsx(t, {
+        defaultMessage: "Keyboard shortcut",
+        id: "rHyMT1rizz"
+      })
+    }), n.jsx("p", {
+      className: "text-text-300 font-base mt-2 mb-6",
+      children: n.jsx(t, {
+        defaultMessage: "Configure the keyboard shortcut used to open Claw in Chrome.",
+        id: "CcjsWsUTac"
+      })
+    }), n.jsxs("div", {
+      className: "flex items-center justify-between py-4",
+      children: [n.jsxs("div", {
+        className: "flex-1",
+        children: [n.jsx("div", {
+          className: "font-large text-text-100",
+          children: n.jsx(t, {
+            defaultMessage: "Open side panel",
+            id: "MihpzFiE1j"
+          })
+        }), n.jsx("div", {
+          className: "text-text-400 font-base-sm mt-1",
+          children: e ? n.jsx(t, {
+            defaultMessage: "Current shortcut: {shortcut}",
+            id: "2x8xsy/VJk",
+            values: {
+              shortcut: n.jsx("kbd", {
+                className: "px-1.5 py-0.5 bg-bg-300 border border-border-300 rounded text-text-200 font-mono text-xs",
+                children: e
+              })
+            }
+          }) : n.jsx(t, {
+            defaultMessage: "No shortcut configured",
+            id: "7/3PxH3ltB"
+          })
+        })]
+      }), n.jsxs("button", {
+        onClick: () => {
+          chrome.tabs.create({
+            url: "chrome://extensions/shortcuts"
+          });
+        },
+        className: "flex items-center gap-2 px-4 py-2 text-text-200 hover:bg-bg-200 hover:text-text-100 border border-border-300 rounded-lg transition-all font-base",
+        children: [n.jsx($, {
+          className: "w-4 h-4"
+        }), n.jsx(t, {
+          defaultMessage: "Configure",
+          id: "9t1iivhk67"
+        })]
+      })]
+    })]
+  });
+};
+const J = ({
+  subview: a
+}) => {
   const i = a === "provider";
   const o = a === "session";
   const l = a === "prompt";
@@ -733,62 +791,7 @@ const J = ({
     }), n.jsxs("div", {
       className: "space-y-6",
       hidden: !d,
-      children: [n.jsx(cpGithubUpdateSection, {}), n.jsxs("div", {
-        className: "bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8",
-        children: [n.jsx("h3", {
-          className: "text-text-100 font-xl-bold",
-          children: n.jsx(t, {
-            defaultMessage: "Keyboard shortcut",
-            id: "rHyMT1rizz"
-          })
-        }), n.jsx("p", {
-          className: "text-text-300 font-base mt-2 mb-6",
-          children: n.jsx(t, {
-            defaultMessage: "Configure the keyboard shortcut used to open Claw in Chrome.",
-            id: "CcjsWsUTac"
-          })
-        }), n.jsxs("div", {
-          className: "flex items-center justify-between py-4",
-          children: [n.jsxs("div", {
-            className: "flex-1",
-            children: [n.jsx("div", {
-              className: "font-large text-text-100",
-              children: n.jsx(t, {
-                defaultMessage: "Open side panel",
-                id: "MihpzFiE1j"
-              })
-            }), n.jsx("div", {
-              className: "text-text-400 font-base-sm mt-1",
-              children: e ? n.jsx(t, {
-                defaultMessage: "Current shortcut: {shortcut}",
-                id: "2x8xsy/VJk",
-                values: {
-                  shortcut: n.jsx("kbd", {
-                    className: "px-1.5 py-0.5 bg-bg-300 border border-border-300 rounded text-text-200 font-mono text-xs",
-                    children: e
-                  })
-                }
-              }) : n.jsx(t, {
-                defaultMessage: "No shortcut configured",
-                id: "7/3PxH3ltB"
-              })
-            })]
-          }), n.jsxs("button", {
-            onClick: () => {
-              chrome.tabs.create({
-                url: "chrome://extensions/shortcuts"
-              });
-            },
-            className: "flex items-center gap-2 px-4 py-2 text-text-200 hover:bg-bg-200 hover:text-text-100 border border-border-300 rounded-lg transition-all font-base",
-            children: [n.jsx($, {
-              className: "w-4 h-4"
-            }), n.jsx(t, {
-              defaultMessage: "Configure",
-              id: "9t1iivhk67"
-            })]
-          })]
-        })]
-      }), n.jsx("div", {
+      children: [n.jsx(cpGithubUpdateSection, {}), n.jsx("div", {
         id: "cp-options-debug-anchor",
         className: "space-y-6"
       })]
@@ -1461,7 +1464,7 @@ function oe({
   return n.jsxs(n.Fragment, {
     children: [n.jsx(ie, {}), n.jsxs("div", {
       className: "space-y-6",
-      children: [n.jsxs("div", {
+      children: [!l && n.jsx(cpKeyboardShortcutCard, {}), n.jsxs("div", {
         className: l ? "px-6 pt-6 pb-6" : "bg-bg-100 border-[0.5px] border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8",
         children: [!l && n.jsxs("div", {
           className: "flex items-start justify-between mb-2",

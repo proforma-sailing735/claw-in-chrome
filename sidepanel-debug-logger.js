@@ -2,12 +2,29 @@
   if (globalThis.__CP_SIDEPANEL_DEBUG__) {
     return;
   }
+  const contract = globalThis.__CP_CONTRACT__ || {};
+  const providerContract = contract.customProvider || {};
+  const debugContract = contract.debug || {};
   const STORAGE_KEY = "sidepanelDebugLogs";
   const META_KEY = "sidepanelDebugMeta";
   const MAX_ENTRIES = 500;
   const FLUSH_DELAY_MS = 150;
   const SESSION_ID = "sp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-  const RELEVANT_STORAGE_KEYS = new Set(["customProviderConfig", "anthropicApiKey", "accessToken", "refreshToken", "lastAuthFailureReason", "selectedModel", "selectedModelQuickMode", "lastPermissionModePreference", "chrome_ext_models"]);
+  const RELEVANT_STORAGE_KEYS = new Set(
+    Array.isArray(debugContract.RELEVANT_STORAGE_KEYS) && debugContract.RELEVANT_STORAGE_KEYS.length
+      ? debugContract.RELEVANT_STORAGE_KEYS
+      : [
+        providerContract.STORAGE_KEY || "customProviderConfig",
+        providerContract.ANTHROPIC_API_KEY_STORAGE_KEY || "anthropicApiKey",
+        "accessToken",
+        "refreshToken",
+        "lastAuthFailureReason",
+        providerContract.SELECTED_MODEL_STORAGE_KEY || "selectedModel",
+        providerContract.SELECTED_MODEL_QUICK_MODE_STORAGE_KEY || "selectedModelQuickMode",
+        "lastPermissionModePreference",
+        "chrome_ext_models"
+      ]
+  );
   const SENSITIVE_KEYS = new Set(["apikey", "anthropicapikey", "accesstoken", "refreshtoken", "authtoken", "authorization", "token", "secret", "password", "currentapikey", "originalapikey"]);
   const PRIVATE_URL_KEYS = new Set(["baseurl", "providerurl", "requesturl", "url", "href", "uri", "filename", "source", "origin"]);
   const PRIVATE_TEXT_KEYS = new Set(["bodypreview", "notes", "prompt", "content", "requestbody", "responsebody", "rawbody", "inputtext", "outputtext"]);

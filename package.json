@@ -1,0 +1,15 @@
+{
+  "name": "claw-in-chrome",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/run-all-tests.js",
+    "test:node": "node tests/run-suite.js unit integration",
+    "test:unit": "node tests/run-suite.js unit",
+    "test:integration": "node tests/run-suite.js integration",
+    "test:e2e": "node tests/run-suite.js e2e"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}
