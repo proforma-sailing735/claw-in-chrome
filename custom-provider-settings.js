@@ -311,7 +311,7 @@
       promptContentRequired: "Enter the agent role prompt first.",
       promptSaveFailure: "Failed to save this prompt profile.",
       workflowTitle: "Workflow library",
-      workflowSubtitle: "Manage reusable workflow definitions derived from Teach Claw or handcrafted prompts. Save them locally, edit JSON directly, and import or export them in bulk.",
+      workflowSubtitle: "Manage reusable workflow definitions derived from Teach Claw or handcrafted prompts. Save them locally, edit JSON directly, import or export them in bulk, and automatically mirror saved shortcuts here.",
       workflowNew: "New workflow",
       workflowImport: "Import JSON",
       workflowExportAll: "Export all",
@@ -321,7 +321,7 @@
       workflowEditTitle: "Edit workflow",
       workflowCreateTitle: "Create workflow",
       workflowJsonLabel: "Workflow JSON",
-      workflowJsonHelp: "Use one JSON object per workflow. Required fields: name, label, description, prompt. Optional fields such as url_patterns, inputs, enabled, source, and version are preserved.",
+      workflowJsonHelp: "Use one JSON object per workflow. Required fields: name, label, description, prompt. Optional fields such as url_patterns, inputs, enabled, source, and version are preserved. Entries synced from shortcuts refresh automatically when the shortcut changes.",
       workflowJsonPlaceholder: "{\n  \"name\": \"new-workflow\",\n  \"label\": \"New workflow\",\n  \"description\": \"What this workflow does\",\n  \"prompt\": \"Describe the repeatable task here.\",\n  \"url_patterns\": [\"*://*/*\"],\n  \"inputs\": [],\n  \"enabled\": true,\n  \"source\": \"user\",\n  \"version\": 1\n}",
       workflowSave: "Save workflow",
       workflowFormatJson: "Format JSON",
@@ -332,6 +332,7 @@
       workflowSourceLabel: "Source",
       workflowVersionLabel: "Version",
       workflowSourceUser: "Custom",
+      workflowSourceShortcut: "Shortcut",
       workflowSourceRecorded: "Recorded",
       workflowSourceImported: "Imported",
       workflowEnable: "Enable",
@@ -532,7 +533,7 @@
       promptContentRequired: "请先填写智能体角色提示词。",
       promptSaveFailure: "保存提示词配置失败。",
       workflowTitle: "工作流管理",
-      workflowSubtitle: "集中保存 Teach Claw 产出的可复用流程提示词，也支持手动维护、直接编辑 JSON，以及导入导出本地工作流库。",
+      workflowSubtitle: "集中保存 Teach Claw 产出的可复用流程提示词，也支持手动维护、直接编辑 JSON、导入导出本地工作流库；已保存的快捷方式也会自动同步到这里。",
       workflowNew: "新增工作流",
       workflowImport: "导入 JSON",
       workflowExportAll: "导出全部",
@@ -542,7 +543,7 @@
       workflowEditTitle: "编辑工作流",
       workflowCreateTitle: "新增工作流",
       workflowJsonLabel: "工作流 JSON",
-      workflowJsonHelp: "每次编辑一条工作流 JSON。必填字段：name、label、description、prompt。url_patterns、inputs、enabled、source、version 等可选字段会原样保留。",
+      workflowJsonHelp: "每次编辑一条工作流 JSON。必填字段：name、label、description、prompt。url_patterns、inputs、enabled、source、version 等可选字段会原样保留。来源为快捷方式同步的条目会在快捷方式变更后自动刷新。",
       workflowJsonPlaceholder: "{\n  \"name\": \"new-workflow\",\n  \"label\": \"新工作流\",\n  \"description\": \"这个工作流要完成什么\",\n  \"prompt\": \"描述要重复执行的浏览器任务。\",\n  \"url_patterns\": [\"*://*/*\"],\n  \"inputs\": [],\n  \"enabled\": true,\n  \"source\": \"user\",\n  \"version\": 1\n}",
       workflowSave: "保存工作流",
       workflowFormatJson: "格式化 JSON",
@@ -553,6 +554,7 @@
       workflowSourceLabel: "来源",
       workflowVersionLabel: "版本",
       workflowSourceUser: "自定义",
+      workflowSourceShortcut: "快捷方式同步",
       workflowSourceRecorded: "录制生成",
       workflowSourceImported: "导入",
       workflowEnable: "启用",
@@ -871,7 +873,7 @@
       url_patterns: normalizeWorkflowPatterns(source.url_patterns || source.urlPatterns || []),
       inputs: normalizeWorkflowInputs(source.inputs),
       enabled: source.enabled !== false,
-      source: rawSource === "recorded" ? "recorded" : rawSource === "imported" ? "imported" : "user",
+      source: rawSource === "recorded" ? "recorded" : rawSource === "imported" ? "imported" : rawSource === "shortcut" ? "shortcut" : "user",
       version: Math.max(1, Math.round(Number(source.version) || 1)),
       createdAt: normalizeSessionNumber(source.createdAt, fallbackCreatedAt),
       updatedAt: normalizeSessionNumber(source.updatedAt, fallbackUpdatedAt)
@@ -4130,6 +4132,9 @@
       }
       if (source === "imported") {
         return strings.workflowSourceImported;
+      }
+      if (source === "shortcut") {
+        return strings.workflowSourceShortcut;
       }
       return strings.workflowSourceUser;
     }

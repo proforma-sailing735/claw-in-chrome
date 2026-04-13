@@ -10,6 +10,7 @@ const {
 const rootDir = path.join(__dirname, "..", "..");
 const contractPath = path.join(rootDir, "claw-contract.js");
 const modelsPath = path.join(rootDir, "custom-provider-models.js");
+const detachedWindowRuntimePath = path.join(rootDir, "service-worker-detached-window-runtime.js");
 const runtimePath = path.join(rootDir, "service-worker-runtime.js");
 const loaderPath = path.join(rootDir, "service-worker-loader.js");
 const manifestPath = path.join(rootDir, "manifest.json");
@@ -66,16 +67,19 @@ async function testRecoveredModulesReadFrozenContract() {
     }
   });
   runScriptInSandbox(modelsPath, sandbox);
+  runScriptInSandbox(detachedWindowRuntimePath, sandbox);
   runScriptInSandbox(runtimePath, sandbox);
 
   const contract = sandbox.__CP_CONTRACT__;
   const helpers = sandbox.CustomProviderModels;
+  const detachedWindowApi = sandbox.__CP_DETACHED_WINDOW_RUNTIME__;
   const serviceWorkerApi = sandbox.__CP_SERVICE_WORKER_RUNTIME__;
 
   assert.equal(helpers.LEGACY_STORAGE_KEY, contract.customProvider.STORAGE_KEY);
   assert.equal(helpers.PROFILES_STORAGE_KEY, contract.customProvider.PROFILES_STORAGE_KEY);
   assert.equal(helpers.ACTIVE_PROFILE_STORAGE_KEY, contract.customProvider.ACTIVE_PROFILE_STORAGE_KEY);
   assert.equal(helpers.HTTP_PROVIDER_STORAGE_KEY, contract.customProvider.HTTP_PROVIDER_STORAGE_KEY);
+  assert.ok(detachedWindowApi, "detached window runtime should be attached to globalThis");
   assert.equal(serviceWorkerApi.constants.CHAT_SCOPE_PREFIX, contract.session.CHAT_SCOPE_PREFIX);
   assert.equal(serviceWorkerApi.constants.CHAT_CLEANUP_AUDIT_KEY, contract.session.CHAT_CLEANUP_AUDIT_KEY);
 }
@@ -133,6 +137,7 @@ async function testShellEntryPointsLoadContractBeforeRecoveredModules() {
   assert.ok(optionsContractIndex < indexOfOrFail(optionsHtml, "/custom-provider-models.js", "options.html"));
 
   assert.match(loaderSource, /import\s+"\.\/claw-contract\.js";/);
+  assert.match(loaderSource, /import\s+"\.\/service-worker-detached-window-runtime\.js";/);
 }
 
 async function testReleaseAndManifestKeepFrozenShellInterfaces() {
@@ -142,6 +147,7 @@ async function testReleaseAndManifestKeepFrozenShellInterfaces() {
   assert.equal(manifest.background?.service_worker, "service-worker-loader.js");
   assert.equal(manifest.options_page, "options.html");
   assert.match(workflow, /\bclaw-contract\.js\b/);
+  assert.match(workflow, /\bservice-worker-detached-window-runtime\.js\b/);
 }
 
 async function main() {

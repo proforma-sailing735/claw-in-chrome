@@ -2,6 +2,9 @@ const __vite__mapDeps = (i, m = __vite__mapDeps, d = m.f ||= ["assets/auto-track
 import { r as e, c as t, j as n, a as r, b as o, g as a, R as i, d as s } from "./index-BVS4T5_D.js";
 import { r as u, M as c, u as l, I as d } from "./index-5uYI7rOK.js";
 import { q as p, v as f, _ as h, p as m, a as g, g as v, S as y, l as b, F as w, j as k, t as j, u as _, s as x } from "./PermissionManager-9s959502.js";
+// 语义锚点：这个 chunk 不只是 useStorageState hook。
+// sidepanel 依赖的 cookies、本地存储、权限辅助能力、会话/埋点基础设施都混在这里。
+const __cpSidepanelStorageSupportChunk = true;
 var E = {};
 function S(e) {
   if (e.endsWith(".anthropic.com")) {

@@ -20858,8 +20858,13 @@ function Ey(t) {
     [vy.REMOTE_MCP]: "access"
   }[t];
 }
+// 语义锚点：这两个 permissionMode 都会放宽逐步确认策略。
 const Sy = ["follow_a_plan", "skip_all_permission_checks"];
+// 默认计划审批模式。
 const Ty = "follow_a_plan";
+const __cpPermissionModesWithRelaxedPrompts = Sy;
+const __cpDefaultPlanApprovalMode = Ty;
+// 权限核心类：负责站点权限、域间跳转权限、turn-approved domains、一次性/永久授权存储。
 class xy {
   permissions = [];
   cache = new Map();
@@ -21023,6 +21028,7 @@ class xy {
     }
   }
   async grantPermission(t, e, n) {
+    // 用户点击允许后，会在这里写入 ALLOW 规则。
     const r = {
       id: crypto.randomUUID(),
       scope: t,
@@ -21036,6 +21042,7 @@ class xy {
     this.clearCache();
   }
   async denyPermission(t, e) {
+    // DENY 只有 ALWAYS 会落库；ONCE 只是本次请求拒绝，不留下持久规则。
     if (e === wy.ONCE) {
       return;
     }
@@ -21107,6 +21114,7 @@ class xy {
     }
   }
   async hasSiteWidePermissions(t) {
+    // sidepanel 切到 allow_for_site 时，会调用这里判断当前 hostname 是否已被永久放行。
     await this.loadPermissions();
     return this.permissions.some(e => e.scope.type === "netloc" && e.duration === wy.ALWAYS && e.action === by.ALLOW && e.scope.netloc && this.matchesNetloc(t, e.scope.netloc));
   }
@@ -21158,4 +21166,5 @@ class xy {
     }
   }
 }
+const __cpPermissionManagerClass = xy;
 export { ke as A, de as B, Pe as C, Ty as D, X as E, L as F, nt as G, Oe as H, ot as I, ut as J, at as K, it as L, ct as M, Ae as N, Ce as O, wy as P, Re as Q, rt as R, B as S, vy as T, Sy as U, et as W, d as _, C as a, l as b, yy as c, Ey as d, K as e, gy as f, $ as g, M as h, D as i, E as j, Ya as k, se as l, xy as m, Co as n, _y as o, Ie as p, p as q, F as r, j as s, U as t, N as u, _ as v, my as w, pe as x, he as y, xe as z };

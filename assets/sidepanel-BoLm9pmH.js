@@ -94551,6 +94551,8 @@ const t1 = ut(e => ({
     permissionPrompt: null
   })
 }));
+// 语义锚点：sidepanel 主界面里所有权限提示/模式切换最终都回到这个 store。
+const __cpPermissionPromptStore = t1;
 async function n1(e, t, n) {
   try {
     const {
@@ -94772,6 +94774,8 @@ function o1() {
     loadStickyModel: B,
     setStickyModel: U
   } = $Q();
+  // 语义锚点：这里是 sidepanel 的凭据刷新主入口。
+  // 自定义 provider / 本地 API Key / OAuth 是否必需，都会在这个 IIFE 里统一归并。
   const {
     anthropicApiKey: Z,
     authToken: W,
@@ -96209,6 +96213,8 @@ function o1() {
       }
     };
     document.addEventListener("visibilitychange", e);
+    // 语义锚点：首屏模型 bootstrap 主链。
+    // 这里按 query 参数 -> sticky model -> default override -> quick mode fast model 的顺序落位模型。
     (async () => {
       try {
         const e = ($.options || []).map(e => typeof e == "string" ? {

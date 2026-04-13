@@ -26,6 +26,7 @@
 
 - `service-worker-loader.js`
 - `service-worker-runtime.js`
+- `service-worker-detached-window-runtime.js`
 - `custom-provider-models.js`
 - `provider-format-adapter.js`
 - `custom-provider-settings.js`

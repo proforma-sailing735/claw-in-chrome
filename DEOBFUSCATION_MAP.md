@@ -12,6 +12,7 @@
     - `$Q(e = {})`：模型选择与粘性模型读取
     - `qQ`：会话输入 store
     - `t1`：权限弹窗 store
+    - `__cpPermissionPromptStore`：`t1` 的语义别名，后续查权限态优先搜这个
     - `auth.refresh_state`：凭据刷新与 sidepanel 首屏鉴权
     - `__cpModelBootstrap*`：模型首屏初始化去重
 
@@ -22,6 +23,10 @@
 - `assets/PermissionManager-9s959502.js`
   - 权限模型、权限检查和 OAuth 辅助逻辑。
   - 和侧栏里的权限弹窗、权限提示串联较深。
+  - 本轮补了几个关键锚点：
+    - `__cpPermissionModesWithRelaxedPrompts`
+    - `__cpDefaultPlanApprovalMode`
+    - `__cpPermissionManagerClass`
 
 - `assets/mcpPermissions-qqAoJjJ8.js`
   - 浏览器自动化工具与 MCP 权限流程。
@@ -30,6 +35,8 @@
 - `assets/useStorageState-hbwNMVUA.js`
   - 存储相关 hook 与状态同步。
   - 侧栏模型配置、用户配置、缓存状态会频繁经过这里。
+  - 本轮补了一个入口锚点：
+    - `__cpSidepanelStorageSupportChunk`
 
 - `assets/index-5uYI7rOK.js`
   - React 运行时与打包入口之一。
@@ -65,6 +72,10 @@
 
 - `service-worker-loader.js`
   - 后台脚本加载壳。
+
+- `service-worker-detached-window-runtime.js`
+  - 独立窗口模式的可维护运行时。
+  - 负责窗口锁存储、URL 解析、复用现有 popup，以及新建独立窗口。
 
 ## 后续人工整理建议
 
