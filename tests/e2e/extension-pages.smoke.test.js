@@ -298,7 +298,7 @@ async function testExtensionPagesLoad() {
     await optionsPage.click("[data-cp-visualizer-launch]");
     const visualizerPage = await launchedVisualizerPagePromise;
     await visualizerPage.waitForLoadState("domcontentloaded");
-    assert.equal(visualizerPage.url().endsWith("/visualizer.html"), true);
+    assert.equal(visualizerPage.url().includes("/visualizer.html"), true);
 
     const visualizerResult = await capturePageErrors(visualizerPage, async () => {
       await visualizerPage.waitForSelector("[data-cpv-app='ready']", {

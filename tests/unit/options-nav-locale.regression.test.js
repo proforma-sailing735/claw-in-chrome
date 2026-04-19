@@ -5,10 +5,12 @@ const path = require("node:path");
 const rootDir = path.join(__dirname, "..", "..");
 const optionsBundlePath = path.join(rootDir, "assets", "options-Hyb_OzME.js");
 const optionsEnhancerPath = path.join(rootDir, "options-update-enhancer.js");
+const optionsUpdatePreviewPath = path.join(rootDir, "options-update-preview.local.js");
 
 function main() {
   const optionsBundleSource = fs.readFileSync(optionsBundlePath, "utf8");
   const optionsEnhancerSource = fs.readFileSync(optionsEnhancerPath, "utf8");
+  const optionsUpdatePreviewSource = fs.readFileSync(optionsUpdatePreviewPath, "utf8");
 
   assert.match(
     optionsBundleSource,
@@ -60,6 +62,12 @@ function main() {
 
   assert.match(
     optionsEnhancerSource,
+    /return detectUiLocaleKey\(getOptionsLocaleOptions\(\)\);/,
+    "options enhancer should delegate locale detection to the shared github update locale helper"
+  );
+
+  assert.match(
+    optionsEnhancerSource,
     /function getStrings\(\) \{\s*return STRINGS\[getOptionsLocaleKey\(\)\];\s*\}/s,
     "options enhancer should derive all copy from the live locale helper"
   );
@@ -74,6 +82,36 @@ function main() {
     optionsEnhancerSource,
     /const localeKey = String\(navigator\.language \|\| ""\)\.toLowerCase\(\)\.startsWith\("zh"\) \? "zh" : "en";/,
     "options enhancer should no longer freeze its locale from navigator.language at script load time"
+  );
+
+  assert.match(
+    optionsUpdatePreviewSource,
+    /function getOptionsLocaleKey\(\) \{/,
+    "update preview addon should resolve locale from the live options page instead of freezing browser language"
+  );
+
+  assert.match(
+    optionsUpdatePreviewSource,
+    /return detectUiLocaleKey\(getOptionsLocaleOptions\(\)\);/,
+    "update preview addon should delegate locale detection to the shared github update locale helper"
+  );
+
+  assert.match(
+    optionsUpdatePreviewSource,
+    /function getStrings\(\) \{\s*return STRINGS\[getOptionsLocaleKey\(\)\];\s*\}/s,
+    "update preview addon should derive its copy from the live locale helper"
+  );
+
+  assert.match(
+    optionsUpdatePreviewSource,
+    /title: "更新 UI 预览"/,
+    "update preview addon should keep a Chinese title for the local preview card"
+  );
+
+  assert.doesNotMatch(
+    optionsUpdatePreviewSource,
+    /const localeKey = String\(navigator\.language \|\| ""\)\.toLowerCase\(\)\.startsWith\("zh"\) \? "zh" : "en";/,
+    "update preview addon should no longer freeze its locale from navigator.language at script load time"
   );
 
   console.log("options nav locale regression test passed");

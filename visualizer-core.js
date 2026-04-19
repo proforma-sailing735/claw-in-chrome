@@ -1139,7 +1139,8 @@
     const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
     return {
       scopeId: normalizeSessionScopeId(params.get("scopeId") || ""),
-      sessionId: String(params.get("sessionId") || "").trim()
+      sessionId: String(params.get("sessionId") || "").trim(),
+      locale: String(params.get("locale") || "").trim()
     };
   }
 

@@ -7,6 +7,7 @@
 
   const {
     STORAGE_KEYS,
+    detectUiLocaleKey,
     readStoredState,
     openReleasePage
   } = shared;
@@ -59,22 +60,17 @@
       httpToggleOff: "Disabled"
     }
   };
+  function getOptionsLocaleOptions() {
+    return {
+      document,
+      navigatorLanguage: navigator.language,
+      ignoredSelectors: ["#" + MODAL_ROOT_ID, "#" + HTTP_PANEL_ID, "#" + HTTP_ANCHOR_ID],
+      zhPageHints: ["Claw in Chrome 设置", "Claude in Chrome 设置", "权限", "快捷方式", "选项", "扩展更新", "自动检查更新"],
+      enPagePatterns: [/\bPermissions\b/i, /\bShortcuts\b/i, /\bOptions\b/i, /\bExtension updates\b/i, /\bAuto-check updates\b/i]
+    };
+  }
   function getOptionsLocaleKey() {
-    const pageText = String(document.body?.innerText || document.body?.textContent || "");
-    if (pageText.includes("Claw in Chrome 设置") || pageText.includes("权限") || pageText.includes("快捷方式") || pageText.includes("选项") || pageText.includes("扩展更新") || pageText.includes("自动检查更新")) {
-      return "zh";
-    }
-    if (/\bPermissions\b|\bShortcuts\b|\bOptions\b|\bExtension updates\b|\bAuto-check updates\b/i.test(pageText)) {
-      return "en";
-    }
-    const htmlLang = String(document.documentElement.lang || "").toLowerCase();
-    if (htmlLang.startsWith("zh")) {
-      return "zh";
-    }
-    if (htmlLang.startsWith("en")) {
-      return "en";
-    }
-    return String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+    return detectUiLocaleKey(getOptionsLocaleOptions());
   }
   function getStrings() {
     return STRINGS[getOptionsLocaleKey()];

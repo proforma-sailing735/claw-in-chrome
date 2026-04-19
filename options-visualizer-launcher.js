@@ -3,11 +3,13 @@
     return;
   }
 
+  const uiContract = globalThis.__CP_CONTRACT__?.ui || {};
   const PANEL_ID = "cp-options-visualizer-panel";
   const ANCHOR_ID = "cp-options-visualizer-anchor";
   const BUTTON_ATTR = "data-cp-visualizer-launch";
   const ROOT_ATTR = "data-cp-visualizer-root";
   const PRIMARY_BUTTON_CLASS = "px-6 py-3 bg-brand-100 text-oncolor-100 rounded-xl hover:bg-brand-100/90 transition-all font-large disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2";
+  const PREFERRED_LOCALE_STORAGE_KEY = uiContract.PREFERRED_LOCALE_STORAGE_KEY || "preferred_locale";
 
   const STRINGS = {
     zh: {
@@ -62,6 +64,14 @@
     });
   }
 
+  function normalizeLocaleKey(value) {
+    const locale = String(value || "").trim().toLowerCase();
+    if (!locale) {
+      return "";
+    }
+    return locale.startsWith("zh") ? "zh" : "en";
+  }
+
   function getLocaleKey() {
     const pageText = String(document.body?.innerText || document.body?.textContent || "");
     if (pageText.includes("Claw in Chrome 设置") || pageText.includes("扩展更新") || pageText.includes("选项")) {
@@ -71,7 +81,23 @@
     if (htmlLang.startsWith("zh")) {
       return "zh";
     }
-    return String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+    return normalizeLocaleKey(navigator.language) || "en";
+  }
+
+  async function readPreferredLocaleKey() {
+    try {
+      const stored = await chrome.storage.local.get(PREFERRED_LOCALE_STORAGE_KEY);
+      return normalizeLocaleKey(stored[PREFERRED_LOCALE_STORAGE_KEY]);
+    } catch {
+      return "";
+    }
+  }
+
+  async function buildVisualizerTargetUrl() {
+    const baseUrl = chrome.runtime.getURL("visualizer.html");
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    const localeKey = await readPreferredLocaleKey() || getLocaleKey();
+    return baseUrl + separator + "locale=" + encodeURIComponent(localeKey === "zh" ? "zh-CN" : "en-US");
   }
 
   function getStrings() {
@@ -147,18 +173,18 @@
     scheduleRender();
   }
 
-  function openVisualizerPage() {
-    const url = chrome.runtime.getURL("visualizer.html");
+  async function openVisualizerPage() {
+    const targetUrl = await buildVisualizerTargetUrl();
     openStatus = null;
     scheduleRender();
 
     try {
       if (globalThis.chrome?.tabs?.create) {
         chrome.tabs.create({
-          url
+          url: targetUrl
         }, function () {
           if (chrome.runtime.lastError) {
-            if (!openWithWindow(url)) {
+            if (!openWithWindow(targetUrl)) {
               setOpenError(chrome.runtime.lastError.message);
               return;
             }
@@ -171,13 +197,13 @@
         return;
       }
     } catch (error) {
-      if (!openWithWindow(url)) {
+      if (!openWithWindow(targetUrl)) {
         setOpenError(error);
       }
       return;
     }
 
-    if (!openWithWindow(url)) {
+    if (!openWithWindow(targetUrl)) {
       setOpenError("unable to create tab");
     }
   }
@@ -221,7 +247,11 @@
     const button = panel.querySelector("[" + BUTTON_ATTR + "]");
     if (button) {
       button.style.pointerEvents = "auto";
-      button.onclick = openVisualizerPage;
+      button.onclick = function () {
+        openVisualizerPage().catch(function (error) {
+          setOpenError(error);
+        });
+      };
     }
     panel.dataset.cpVisualizerSignature = renderSignature;
     return panel;

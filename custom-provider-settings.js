@@ -10,6 +10,7 @@
   const promptsContract = rootContract.prompts || {};
   const workflowsContract = rootContract.workflows || {};
   const debugContract = rootContract.debug || {};
+  const uiContract = rootContract.ui || {};
   const STORAGE_KEY = providerContract.STORAGE_KEY || "customProviderConfig";
   const BACKUP_KEY = providerContract.BACKUP_KEY || "customProviderOriginalApiKey";
   const ANTHROPIC_API_KEY_STORAGE_KEY = providerContract.ANTHROPIC_API_KEY_STORAGE_KEY || "anthropicApiKey";
@@ -35,6 +36,7 @@
   const PROMPT_PROFILES_STORAGE_KEY = promptsContract.PROFILES_STORAGE_KEY || "customSystemPromptProfiles";
   const PROMPT_ACTIVE_PROFILE_STORAGE_KEY = promptsContract.ACTIVE_PROFILE_STORAGE_KEY || "customSystemPromptActiveProfileId";
   const WORKFLOW_STORAGE_KEY = workflowsContract.STORAGE_KEY || "claw_site_workflows_v1";
+  const PREFERRED_LOCALE_STORAGE_KEY = uiContract.PREFERRED_LOCALE_STORAGE_KEY || "preferred_locale";
   const CHAT_SCOPE_PREFIX = sessionContract.CHAT_SCOPE_PREFIX || "claw.chat.scopes.";
   const CHAT_SESSION_LIMIT = 20;
   const CHAT_SESSION_TITLE_LIMIT = 80;
@@ -951,6 +953,7 @@
   let activeDropdownController = null;
   let activeUiCleanup = null;
   let uiRebuildScheduled = false;
+  let preferredUiLocaleKey = "";
   const normalizeReasoningEffort = helpers.normalizeReasoningEffort || function (value) {
     const effort = String(value || "").trim().toLowerCase();
     return ["none", "low", "medium", "high", "max"].includes(effort) ? effort : "medium";
@@ -1037,7 +1040,30 @@
     }
     return text.trim();
   }
-  function getUiLocaleKey() {
+  function normalizeLocaleKey(value) {
+    const locale = String(value || "").trim().toLowerCase();
+    if (!locale) {
+      return "";
+    }
+    return locale.startsWith("zh") ? "zh" : "en";
+  }
+  async function readStoredPreferredUiLocaleKey() {
+    try {
+      const stored = await chrome.storage.local.get(PREFERRED_LOCALE_STORAGE_KEY);
+      return normalizeLocaleKey(stored[PREFERRED_LOCALE_STORAGE_KEY]);
+    } catch {
+      return "";
+    }
+  }
+  function applyPreferredUiLocaleKey(value) {
+    const nextLocaleKey = normalizeLocaleKey(value);
+    if (nextLocaleKey === preferredUiLocaleKey) {
+      return false;
+    }
+    preferredUiLocaleKey = nextLocaleKey;
+    return true;
+  }
+  function detectDocumentUiLocaleKey() {
     const nativeText = getDocumentTextExcludingCustomRoots();
     if (/\bPermissions\b|\bShortcuts\b|\bOptions\b|\bChange language\b/i.test(nativeText)) {
       return "en";
@@ -1054,6 +1080,9 @@
     }
     const navigatorLang = String(navigator.language || "").toLowerCase();
     return navigatorLang.startsWith("zh") ? "zh" : "en";
+  }
+  function getUiLocaleKey() {
+    return preferredUiLocaleKey || detectDocumentUiLocaleKey();
   }
   function isChineseUi() {
     return getUiLocaleKey() === "zh";
@@ -5514,6 +5543,10 @@
       if (areaName !== "local") {
         return;
       }
+      if (PREFERRED_LOCALE_STORAGE_KEY in changes && applyPreferredUiLocaleKey(changes[PREFERRED_LOCALE_STORAGE_KEY]?.newValue)) {
+        scheduleUiRebuild();
+        return;
+      }
       const hasSessionChange = Object.keys(changes).some(function (key) {
         return String(key || "").startsWith(CHAT_SCOPE_PREFIX);
       });
@@ -5791,11 +5824,25 @@
       hash: location.hash
     });
   }
+  async function bootstrapUi() {
+    applyPreferredUiLocaleKey(await readStoredPreferredUiLocaleKey());
+    buildUi();
+  }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", buildUi, {
+    document.addEventListener("DOMContentLoaded", function () {
+      bootstrapUi().catch(function (error) {
+        debugLog("customProvider.bootstrap.error", {
+          error
+        }, "error");
+      });
+    }, {
       once: true
     });
   } else {
-    buildUi();
+    bootstrapUi().catch(function (error) {
+      debugLog("customProvider.bootstrap.error", {
+        error
+      }, "error");
+    });
   }
 })();

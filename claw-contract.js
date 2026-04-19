@@ -50,6 +50,9 @@
     models: {
       CONFIG_STORAGE_KEY: "chrome_ext_models"
     },
+    ui: {
+      PREFERRED_LOCALE_STORAGE_KEY: "preferred_locale"
+    },
     session: {
       CHAT_SCOPE_PREFIX: "claw.chat.scopes.",
       CHAT_CLEANUP_AUDIT_KEY: "claw.chat.cleanup.audit",

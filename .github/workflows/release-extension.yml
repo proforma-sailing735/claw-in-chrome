@@ -154,6 +154,7 @@ jobs:
             mcp-permission-popup-protocol.js
             offscreen.html
             offscreen.js
+            options-visualizer-launcher.js
             options-debug-logger.js
             options.html
             options-update-enhancer.js
@@ -162,6 +163,8 @@ jobs:
             service-worker-runtime.js
             service-worker-loader.js
             service-worker-detached-window-runtime.js
+            service-worker-shortcut-workflow-sync.js
+            detached-window-title.js
             sidepanel-debug-logger.js
             sidepanel-inline-provider.css
             sidepanel-inline-provider.js

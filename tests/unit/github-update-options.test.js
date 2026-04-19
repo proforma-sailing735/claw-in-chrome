@@ -27,6 +27,11 @@ function createOptionsHarness(options = {}) {
   const document = new FakeDocument({
     readyState: "complete"
   });
+  if (options.bodyText) {
+    const localeProbe = document.createElement("div");
+    localeProbe.textContent = options.bodyText;
+    document.body.appendChild(localeProbe);
+  }
   const anchor = document.createElement("div");
   anchor.id = "cp-github-update-options-anchor";
   document.body.appendChild(anchor);
@@ -48,6 +53,40 @@ function createOptionsHarness(options = {}) {
     },
     MESSAGE_TYPES: {
       CHECK_NOW: "CP_GITHUB_UPDATE_CHECK_NOW"
+    },
+    detectUiLocaleKey(context = {}) {
+      const pageText = String(context.document?.body?.innerText || context.document?.body?.textContent || "");
+      if (Array.isArray(context.zhPageHints) && context.zhPageHints.some(hint => hint && pageText.includes(String(hint)))) {
+        return "zh";
+      }
+      if (Array.isArray(context.enPagePatterns) && context.enPagePatterns.some(pattern => pattern instanceof RegExp && pattern.test(pageText))) {
+        return "en";
+      }
+      const htmlLang = String(context.document?.documentElement?.lang || "").toLowerCase();
+      if (htmlLang.startsWith("zh")) {
+        return "zh";
+      }
+      if (htmlLang.startsWith("en")) {
+        return "en";
+      }
+      return String(context.navigatorLanguage || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+    },
+    getUiLocaleTag(context = {}) {
+      const pageText = String(context.document?.body?.innerText || context.document?.body?.textContent || "");
+      if (Array.isArray(context.zhPageHints) && context.zhPageHints.some(hint => hint && pageText.includes(String(hint)))) {
+        return "zh-CN";
+      }
+      if (Array.isArray(context.enPagePatterns) && context.enPagePatterns.some(pattern => pattern instanceof RegExp && pattern.test(pageText))) {
+        return "en-US";
+      }
+      const htmlLang = String(context.document?.documentElement?.lang || "").toLowerCase();
+      if (htmlLang.startsWith("zh")) {
+        return "zh-CN";
+      }
+      if (htmlLang.startsWith("en")) {
+        return "en-US";
+      }
+      return String(context.navigatorLanguage || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
     },
     formatTimestamp(value) {
       return `fmt:${value}`;
@@ -195,9 +234,24 @@ async function testOptionsCardSupportsReleaseDownloadAndHashRemoval() {
   assert.equal(harness.root(), null);
 }
 
+async function testOptionsCardFollowsOptionsUiLocaleInsteadOfNavigatorLanguage() {
+  const harness = createOptionsHarness({
+    language: "en-US",
+    bodyText: "Claw in Chrome 设置 扩展更新 选项"
+  });
+  await harness.flushRenders();
+
+  const root = harness.root();
+  assert.ok(root, "options update card should render for Chinese UI");
+  assert.equal(String(root.textContent || "").includes("扩展更新"), true);
+  assert.ok(findElementByText(root, "button", "立即检查更新"));
+  assert.ok(findElementByText(root, "button", "下载最新版本"));
+}
+
 async function main() {
   await testOptionsCardSupportsCheckNowAndAutoToggle();
   await testOptionsCardSupportsReleaseDownloadAndHashRemoval();
+  await testOptionsCardFollowsOptionsUiLocaleInsteadOfNavigatorLanguage();
   console.log("github update options tests passed");
 }
 

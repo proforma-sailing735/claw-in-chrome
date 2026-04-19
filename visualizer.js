@@ -259,12 +259,17 @@
     runtime: 50,
     tools: 83.333
   };
+  const uiContract = globalThis.__CP_CONTRACT__?.ui || {};
+  const PREFERRED_LOCALE_STORAGE_KEY = uiContract.PREFERRED_LOCALE_STORAGE_KEY || "preferred_locale";
 
   const initialQuery = core.parseVisualizerQuery(globalThis.location?.search || "");
+  const initialLocaleKey = getLocaleKey({
+    hintLocale: initialQuery.locale
+  });
 
   const state = {
-    localeKey: getLocaleKey(),
-    strings: null,
+    localeKey: initialLocaleKey,
+    strings: STRINGS[initialLocaleKey],
     storageSnapshot: {},
     run: null,
     sessionGroups: [],
@@ -278,9 +283,48 @@
     query: initialQuery
   };
 
-  function getLocaleKey() {
-    const language = String(document.documentElement.lang || navigator.language || "").toLowerCase();
+  function normalizeLocaleTag(value) {
+    const locale = String(value || "").trim().toLowerCase();
+    if (!locale) {
+      return "";
+    }
+    return locale.startsWith("zh") ? "zh-CN" : "en-US";
+  }
+
+  function getLocaleKey(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const preferredLocale = normalizeLocaleTag(settings.preferredLocale);
+    if (preferredLocale) {
+      return preferredLocale.startsWith("zh") ? "zh" : "en";
+    }
+    const hintLocale = normalizeLocaleTag(settings.hintLocale);
+    if (hintLocale) {
+      return hintLocale.startsWith("zh") ? "zh" : "en";
+    }
+    const language = String(navigator.language || "").toLowerCase();
     return language.startsWith("zh") ? "zh" : "en";
+  }
+
+  function applyLocalePreference(preferredLocale) {
+    const nextLocaleKey = getLocaleKey({
+      preferredLocale,
+      hintLocale: state.query?.locale
+    });
+    if (nextLocaleKey === state.localeKey && state.strings) {
+      return false;
+    }
+    state.localeKey = nextLocaleKey;
+    state.strings = STRINGS[nextLocaleKey];
+    return true;
+  }
+
+  async function readPreferredLocaleTag() {
+    try {
+      const stored = await chrome.storage.local.get(PREFERRED_LOCALE_STORAGE_KEY);
+      return normalizeLocaleTag(stored[PREFERRED_LOCALE_STORAGE_KEY]);
+    } catch {
+      return "";
+    }
   }
 
   function escapeHtml(value) {
@@ -343,15 +387,19 @@
     return state.strings.stageTitle[stageId] || stageId || "—";
   }
 
-  function buildQueryHref(scopeId, sessionId) {
+  function buildQueryHref(scopeId, sessionId, locale) {
     const params = new URLSearchParams();
     const normalizedScopeId = String(scopeId || "").trim();
     const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedLocale = String(locale || "").trim();
     if (normalizedScopeId) {
       params.set("scopeId", normalizedScopeId);
     }
     if (normalizedSessionId) {
       params.set("sessionId", normalizedSessionId);
+    }
+    if (normalizedLocale) {
+      params.set("locale", normalizedLocale);
     }
     const query = params.toString();
     const pathname = globalThis.location?.pathname || "/visualizer.html";
@@ -361,9 +409,10 @@
   function syncQueryWithSelection(scopeId, sessionId) {
     state.query = {
       scopeId: String(scopeId || "").trim(),
-      sessionId: String(sessionId || "").trim()
+      sessionId: String(sessionId || "").trim(),
+      locale: String(state.query?.locale || "").trim()
     };
-    const nextHref = buildQueryHref(state.query.scopeId, state.query.sessionId);
+    const nextHref = buildQueryHref(state.query.scopeId, state.query.sessionId, state.query.locale);
     if (globalThis.history?.replaceState && nextHref !== ((globalThis.location?.pathname || "") + (globalThis.location?.search || ""))) {
       globalThis.history.replaceState(null, "", nextHref);
     }
@@ -1303,8 +1352,14 @@
     if (areaName !== "local") {
       return;
     }
+    const localeChanged = Object.prototype.hasOwnProperty.call(changes, PREFERRED_LOCALE_STORAGE_KEY)
+      ? applyLocalePreference(changes[PREFERRED_LOCALE_STORAGE_KEY]?.newValue)
+      : false;
     const changedScopeIds = core.getChangedScopeIds(changes, getChatScopePrefix());
     if (changedScopeIds.length === 0) {
+      if (localeChanged) {
+        recomputeRun();
+      }
       return;
     }
     state.storageSnapshot = core.applyStorageChanges(state.storageSnapshot, changes);
@@ -1553,10 +1608,12 @@
     }
   }
 
-  function bootstrap() {
-    state.strings = STRINGS[state.localeKey];
+  async function bootstrap() {
     root.addEventListener("click", handleRootClick);
     document.addEventListener("keydown", handleKeyDown);
+    try {
+      applyLocalePreference(await readPreferredLocaleTag());
+    } catch {}
     loadInitialStorage().catch(function (error) {
       console.error("[visualizer] failed to load storage", error);
       renderEmptyState();

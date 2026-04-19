@@ -59,6 +59,40 @@ function createSidepanelHarness(options = {}) {
       INFO: "githubUpdateInfo",
       DISMISSED_VERSION: "githubUpdateDismissedVersion"
     },
+    detectUiLocaleKey(context = {}) {
+      const pageText = String(context.document?.body?.innerText || context.document?.body?.textContent || "");
+      if (Array.isArray(context.zhPageHints) && context.zhPageHints.some(hint => hint && pageText.includes(String(hint)))) {
+        return "zh";
+      }
+      if (Array.isArray(context.enPagePatterns) && context.enPagePatterns.some(pattern => pattern instanceof RegExp && pattern.test(pageText))) {
+        return "en";
+      }
+      const htmlLang = String(context.document?.documentElement?.lang || "").toLowerCase();
+      if (htmlLang.startsWith("zh")) {
+        return "zh";
+      }
+      if (htmlLang.startsWith("en")) {
+        return "en";
+      }
+      return String(context.navigatorLanguage || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+    },
+    getUiLocaleTag(context = {}) {
+      const pageText = String(context.document?.body?.innerText || context.document?.body?.textContent || "");
+      if (Array.isArray(context.zhPageHints) && context.zhPageHints.some(hint => hint && pageText.includes(String(hint)))) {
+        return "zh-CN";
+      }
+      if (Array.isArray(context.enPagePatterns) && context.enPagePatterns.some(pattern => pattern instanceof RegExp && pattern.test(pageText))) {
+        return "en-US";
+      }
+      const htmlLang = String(context.document?.documentElement?.lang || "").toLowerCase();
+      if (htmlLang.startsWith("zh")) {
+        return "zh-CN";
+      }
+      if (htmlLang.startsWith("en")) {
+        return "en-US";
+      }
+      return String(context.navigatorLanguage || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+    },
     formatTimestamp(value) {
       return `fmt:${value}`;
     },
@@ -87,6 +121,11 @@ function createSidepanelHarness(options = {}) {
   const document = new FakeDocument({
     readyState: "complete"
   });
+  if (options.bodyText) {
+    const localeProbe = document.createElement("div");
+    localeProbe.textContent = options.bodyText;
+    document.body.appendChild(localeProbe);
+  }
   const sandbox = {
     console,
     chrome: chromeMock.chrome,
@@ -190,9 +229,23 @@ async function testBlockedModalRendersRequiredUpgradeActions() {
   assert.equal(harness.releaseCalls[0].latestVersion, "2.0.0.0");
 }
 
+async function testSidepanelModalFollowsUiLocaleInsteadOfNavigatorLanguage() {
+  const harness = createSidepanelHarness({
+    language: "en-US",
+    bodyText: "最近会话"
+  });
+  await harness.flushRenders();
+
+  const root = harness.root();
+  assert.equal(String(root.textContent || "").includes("发现新版本"), true);
+  assert.ok(findElementByText(root, "button", "跳过此版本"));
+  assert.ok(findElementByText(root, "button", "下载最新版本"));
+}
+
 async function main() {
   await testUpdateModalAllowsSkippingDismissedVersion();
   await testBlockedModalRendersRequiredUpgradeActions();
+  await testSidepanelModalFollowsUiLocaleInsteadOfNavigatorLanguage();
   console.log("github update sidepanel tests passed");
 }
 

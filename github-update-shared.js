@@ -165,6 +165,111 @@
     }
     return normalized.slice(0, limit).trimEnd() + "...";
   }
+  function normalizeIgnoredSelectors(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    return Array.isArray(settings.ignoredSelectors) ? settings.ignoredSelectors.map(function (value) {
+      return String(value || "").trim();
+    }).filter(Boolean) : [];
+  }
+  function isIgnoredElement(element, ignoredSelector) {
+    return !!(ignoredSelector && element && typeof element.closest === "function" && element.closest(ignoredSelector));
+  }
+  function readLocaleAttributeText(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const doc = settings.document || globalThis.document;
+    const scope = doc?.body && typeof doc.body.querySelectorAll === "function" ? doc.body : typeof doc?.querySelectorAll === "function" ? doc : null;
+    if (!scope) {
+      return "";
+    }
+    const ignoredSelector = normalizeIgnoredSelectors(settings).join(", ");
+    const attributeNames = ["placeholder", "aria-label", "title", "alt"];
+    try {
+      return Array.from(scope.querySelectorAll(attributeNames.map(function (name) {
+        return "[" + name + "]";
+      }).join(", "))).map(function (element) {
+        if (isIgnoredElement(element, ignoredSelector)) {
+          return "";
+        }
+        return attributeNames.map(function (name) {
+          if (typeof element.getAttribute === "function") {
+            const value = String(element.getAttribute(name) || "").trim();
+            if (value) {
+              return value;
+            }
+          }
+          const directValue = typeof element?.[name] === "string" ? String(element[name]).trim() : "";
+          return directValue;
+        }).filter(Boolean).join(" ");
+      }).filter(Boolean).join(" ").trim();
+    } catch {
+      return "";
+    }
+  }
+  function readDocumentText(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const doc = settings.document || globalThis.document;
+    if (!doc?.body) {
+      return "";
+    }
+    const fallbackText = String(doc.body.innerText || doc.body.textContent || "").trim();
+    const ignoredSelectors = normalizeIgnoredSelectors(settings);
+    const nodeFilterRef = globalThis.NodeFilter;
+    const ignoredSelector = ignoredSelectors.join(", ");
+    const attributeText = readLocaleAttributeText(settings);
+    if (!ignoredSelectors.length || typeof doc.createTreeWalker !== "function" || !nodeFilterRef) {
+      return [fallbackText, attributeText].filter(Boolean).join(" ").trim() || fallbackText;
+    }
+    try {
+      const walker = doc.createTreeWalker(doc.body, nodeFilterRef.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node?.parentElement;
+          if (!parent) {
+            return nodeFilterRef.FILTER_REJECT;
+          }
+          if (ignoredSelector && typeof parent.closest === "function" && parent.closest(ignoredSelector)) {
+            return nodeFilterRef.FILTER_REJECT;
+          }
+          return nodeFilterRef.FILTER_ACCEPT;
+        }
+      });
+      let text = "";
+      while (walker.nextNode()) {
+        text += " " + String(walker.currentNode?.nodeValue || "");
+      }
+      return [text.trim() || fallbackText, attributeText].filter(Boolean).join(" ").trim() || fallbackText;
+    } catch {
+      return [fallbackText, attributeText].filter(Boolean).join(" ").trim() || fallbackText;
+    }
+  }
+  function detectUiLocaleKey(options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const pageText = readDocumentText(settings);
+    const zhPageHints = Array.isArray(settings.zhPageHints) ? settings.zhPageHints : [];
+    if (zhPageHints.some(function (hint) {
+      return hint && pageText.includes(String(hint));
+    })) {
+      return "zh";
+    }
+    const enPagePatterns = Array.isArray(settings.enPagePatterns) ? settings.enPagePatterns : [];
+    if (enPagePatterns.some(function (pattern) {
+      return pattern instanceof RegExp && pattern.test(pageText);
+    })) {
+      return "en";
+    }
+    const doc = settings.document || globalThis.document;
+    const htmlLang = String(doc?.documentElement?.lang || "").toLowerCase();
+    if (htmlLang.startsWith("zh")) {
+      return "zh";
+    }
+    if (htmlLang.startsWith("en")) {
+      return "en";
+    }
+    const navigatorLanguage = String(settings.navigatorLanguage || globalThis.navigator?.language || "").toLowerCase();
+    return navigatorLanguage.startsWith("zh") ? "zh" : "en";
+  }
+  function getUiLocaleTag(options) {
+    return detectUiLocaleKey(options) === "zh" ? "zh-CN" : "en-US";
+  }
   async function openUrl(url) {
     const nextUrl = String(url || "").trim();
     if (!nextUrl) {
@@ -236,6 +341,9 @@
     normalizeLatestPayload,
     formatTimestamp,
     summarizeNotes,
+    readDocumentText,
+    detectUiLocaleKey,
+    getUiLocaleTag,
     readStoredState,
     openUrl,
     openReleasePage,

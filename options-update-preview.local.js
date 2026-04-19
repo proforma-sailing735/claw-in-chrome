@@ -11,45 +11,74 @@
 
   const ROOT_ID = "cp-local-update-preview-root";
   const BACKUP_KEY = "githubUpdateLocalPreviewBackup";
-  const localeKey = String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
-  const strings = localeKey === "zh" ? {
-    title: "更新 UI 预览",
-    subtitle: "仅本地调试使用。这里的按钮会模拟更新状态，方便你预览设置页卡片、sidepanel 横幅、工具栏 NEW 和版本过旧覆盖层。",
-    cardPreview: "预览设置页卡片",
-    bannerPreview: "预览 Sidepanel 横幅",
-    badgePreview: "预览工具栏 NEW",
-    blockedPreview: "预览版本过旧",
-    reset: "恢复真实状态",
-    hint: "提示：点完按钮后，如果要看 sidepanel 效果，请重新打开 sidepanel。",
-    cardDone: "已切到“设置页卡片”预览。当前页会显示更新卡片，横幅和 NEW 不会额外出现。",
-    bannerDone: "已切到“Sidepanel 横幅”预览。请重新打开 sidepanel 查看顶部提醒。",
-    badgeDone: "已切到“工具栏 NEW”预览。请看浏览器工具栏里的扩展图标。",
-    blockedDone: "已切到“版本过旧”预览。请重新打开 sidepanel 查看覆盖层。",
-    resetDone: "已恢复到模拟前的真实状态。",
-    statusError: "预览切换失败：{message}"
-  } : {
-    title: "Update UI Preview",
-    subtitle: "Local debug only. These buttons simulate update states so you can preview the settings card, sidepanel banner, toolbar NEW badge, and blocked overlay.",
-    cardPreview: "Preview settings card",
-    bannerPreview: "Preview sidepanel banner",
-    badgePreview: "Preview toolbar NEW",
-    blockedPreview: "Preview blocked version",
-    reset: "Restore real state",
-    hint: "Tip: after switching a preview, reopen the sidepanel if you want to inspect sidepanel states.",
-    cardDone: "Switched to settings-card preview. This page will show the update card without the extra banner or NEW badge.",
-    bannerDone: "Switched to sidepanel-banner preview. Reopen the sidepanel to inspect the banner.",
-    badgeDone: "Switched to toolbar-NEW preview. Check the extension icon in the browser toolbar.",
-    blockedDone: "Switched to blocked-version preview. Reopen the sidepanel to inspect the overlay.",
-    resetDone: "Restored the real pre-preview state.",
-    statusError: "Preview switch failed: {message}"
+  const STRINGS = {
+    zh: {
+      title: "更新 UI 预览",
+      subtitle: "仅本地调试使用。这里的按钮会模拟更新状态，方便你预览设置页卡片、sidepanel 横幅、工具栏 NEW 和版本过旧覆盖层。",
+      cardPreview: "预览设置页卡片",
+      bannerPreview: "预览 Sidepanel 横幅",
+      badgePreview: "预览工具栏 NEW",
+      blockedPreview: "预览版本过旧",
+      reset: "恢复真实状态",
+      hint: "提示：点完按钮后，如果要看 sidepanel 效果，请重新打开 sidepanel。",
+      cardDone: "已切到“设置页卡片”预览。当前页会显示更新卡片，横幅和 NEW 不会额外出现。",
+      bannerDone: "已切到“Sidepanel 横幅”预览。请重新打开 sidepanel 查看顶部提醒。",
+      badgeDone: "已切到“工具栏 NEW”预览。请看浏览器工具栏里的扩展图标。",
+      blockedDone: "已切到“版本过旧”预览。请重新打开 sidepanel 查看覆盖层。",
+      resetDone: "已恢复到模拟前的真实状态。",
+      statusError: "预览切换失败：{message}",
+      cardNotes: "本地预览：设置页更新卡片。",
+      bannerNotes: "本地预览：Sidepanel 顶部更新横幅。",
+      badgeNotes: "本地预览：工具栏 NEW 标记。",
+      blockedNotes: "本地预览：版本过旧覆盖层。"
+    },
+    en: {
+      title: "Update UI Preview",
+      subtitle: "Local debug only. These buttons simulate update states so you can preview the settings card, sidepanel banner, toolbar NEW badge, and blocked overlay.",
+      cardPreview: "Preview settings card",
+      bannerPreview: "Preview sidepanel banner",
+      badgePreview: "Preview toolbar NEW",
+      blockedPreview: "Preview blocked version",
+      reset: "Restore real state",
+      hint: "Tip: after switching a preview, reopen the sidepanel if you want to inspect sidepanel states.",
+      cardDone: "Switched to settings-card preview. This page will show the update card without the extra banner or NEW badge.",
+      bannerDone: "Switched to sidepanel-banner preview. Reopen the sidepanel to inspect the banner.",
+      badgeDone: "Switched to toolbar-NEW preview. Check the extension icon in the browser toolbar.",
+      blockedDone: "Switched to blocked-version preview. Reopen the sidepanel to inspect the overlay.",
+      resetDone: "Restored the real pre-preview state.",
+      statusError: "Preview switch failed: {message}",
+      cardNotes: "Local preview: settings-page update card.",
+      bannerNotes: "Local preview: sidepanel top update banner.",
+      badgeNotes: "Local preview: toolbar NEW badge.",
+      blockedNotes: "Local preview: blocked-version overlay."
+    }
   };
 
   const {
     STORAGE_KEYS,
     createDefaultUpdateInfo,
+    detectUiLocaleKey,
     normalizeStoredInfo,
     normalizeVersion
   } = shared;
+
+  function getOptionsLocaleOptions() {
+    return {
+      document,
+      navigatorLanguage: navigator.language,
+      ignoredSelectors: ["#" + ROOT_ID],
+      zhPageHints: ["Claw in Chrome 设置", "Claude in Chrome 设置", "权限", "快捷方式", "选项", "扩展更新", "自动检查更新"],
+      enPagePatterns: [/\bPermissions\b/i, /\bShortcuts\b/i, /\bOptions\b/i, /\bExtension updates\b/i, /\bAuto-check updates\b/i]
+    };
+  }
+
+  function getOptionsLocaleKey() {
+    return detectUiLocaleKey(getOptionsLocaleOptions());
+  }
+
+  function getStrings() {
+    return STRINGS[getOptionsLocaleKey()];
+  }
 
   let root = null;
   let host = null;
@@ -201,13 +230,14 @@
   }
 
   async function previewSettingsCard() {
+    const strings = getStrings();
     const currentVersion = getCurrentVersion();
     const nextVersion = bumpVersion(currentVersion, 1);
     await applyPreview({
       info: {
         latestVersion: nextVersion,
         hasUpdate: true,
-        notes: "本地预览：设置页更新卡片。",
+        notes: strings.cardNotes,
         publishedAt: new Date().toISOString(),
         lastCheckedAt: new Date().toISOString(),
         minSupportedVersion: currentVersion
@@ -225,13 +255,14 @@
   }
 
   async function previewBanner() {
+    const strings = getStrings();
     const currentVersion = getCurrentVersion();
     const nextVersion = bumpVersion(currentVersion, 1);
     await applyPreview({
       info: {
         latestVersion: nextVersion,
         hasUpdate: true,
-        notes: "本地预览：Sidepanel 顶部更新横幅。",
+        notes: strings.bannerNotes,
         publishedAt: new Date().toISOString(),
         lastCheckedAt: new Date().toISOString(),
         minSupportedVersion: currentVersion
@@ -249,12 +280,13 @@
   }
 
   async function previewBadge() {
+    const strings = getStrings();
     const currentVersion = getCurrentVersion();
     await applyPreview({
       info: {
         latestVersion: currentVersion,
         hasUpdate: false,
-        notes: "本地预览：工具栏 NEW 标记。",
+        notes: strings.badgeNotes,
         publishedAt: new Date().toISOString(),
         lastCheckedAt: new Date().toISOString(),
         minSupportedVersion: currentVersion
@@ -272,13 +304,14 @@
   }
 
   async function previewBlocked() {
+    const strings = getStrings();
     const currentVersion = getCurrentVersion();
     const blockedVersion = getBlockedVersion(currentVersion);
     await applyPreview({
       info: {
         latestVersion: blockedVersion,
         hasUpdate: false,
-        notes: "本地预览：版本过旧覆盖层。",
+        notes: strings.blockedNotes,
         publishedAt: new Date().toISOString(),
         lastCheckedAt: new Date().toISOString(),
         minSupportedVersion: blockedVersion
@@ -296,6 +329,7 @@
   }
 
   async function restorePreview() {
+    const strings = getStrings();
     const stored = await chrome.storage.local.get([BACKUP_KEY]);
     const backup = stored[BACKUP_KEY];
     if (!backup) {
@@ -340,6 +374,7 @@
     try {
       await action();
     } catch (error) {
+      const strings = getStrings();
       statusKind = "error";
       statusText = interpolate(strings.statusError, {
         message: String(error?.message || error || "unknown")
@@ -349,6 +384,7 @@
   }
 
   function render() {
+    const strings = getStrings();
     if (!isOptionsRootView()) {
       if (root?.parentNode) {
         root.remove();

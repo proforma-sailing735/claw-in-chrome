@@ -8,6 +8,8 @@
     STORAGE_KEYS,
     formatTimestamp,
     summarizeNotes,
+    detectUiLocaleKey,
+    getUiLocaleTag,
     readStoredState,
     openReleasePage,
     openDownloadPage,
@@ -15,54 +17,55 @@
     normalizeVersion
   } = shared;
 
-  const localeKey = String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
-  const strings = localeKey === "zh" ? {
-    updateTitle: "发现新版本",
-    updateBody: "当前版本 {current}，最新版本 {latest}。下载新版本后，替换本地扩展目录，并在 chrome://extensions 中重新加载。",
-    currentVersion: "当前版本",
-    latestVersion: "最新版本",
-    publishedAt: "发布时间",
-    releaseNotes: "本次更新",
-    manualBadge: "手动升级",
-    requiredBadge: "必须更新",
-    viewRelease: "查看发布页",
-    downloadZip: "下载最新版本",
-    dismiss: "稍后提醒",
-    skipVersion: "跳过此版本",
-    close: "关闭",
-    blockedTitle: "需要手动升级扩展",
-    blockedBody: "当前版本 {current} 已不再受支持，请升级到 {min} 或更高版本后继续使用。",
-    blockedStep1: "下载最新 ZIP 包",
-    blockedStep2: "用新文件替换本地扩展目录",
-    blockedStep3: "打开 chrome://extensions 并点击“重新加载”",
-    notesFallback: "当前发布没有附带详细更新说明。",
-    unknown: "未知"
-  } : {
-    updateTitle: "New version available",
-    updateBody: "You are on {current}. Version {latest} is available. Download the new build, replace the local extension folder, then reload it from chrome://extensions.",
-    currentVersion: "Current version",
-    latestVersion: "Latest version",
-    publishedAt: "Published",
-    releaseNotes: "What changed",
-    manualBadge: "Manual update",
-    requiredBadge: "Update required",
-    viewRelease: "Open release",
-    downloadZip: "Download ZIP",
-    dismiss: "Later",
-    skipVersion: "Skip this version",
-    close: "Close",
-    blockedTitle: "Manual update required",
-    blockedBody: "Your current version ({current}) is no longer supported. Please update to {min} or later to keep using Claw.",
-    blockedStep1: "Download the latest ZIP",
-    blockedStep2: "Replace the local extension folder",
-    blockedStep3: "Open chrome://extensions and click Reload",
-    notesFallback: "This release did not include detailed notes.",
-    unknown: "Unknown"
-  };
-
   const ROOT_ID = "cp-github-update-sidepanel-root";
   const BACKDROP_CLASS = "fixed inset-0 bg-always-black/50 z-50";
   const WRAPPER_CLASS = "fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-5 sm:p-6";
+  const STRINGS = {
+    zh: {
+      updateTitle: "发现新版本",
+      updateBody: "当前版本 {current}，最新版本 {latest}。下载新版本后，替换本地扩展目录，并在 chrome://extensions 中重新加载。",
+      currentVersion: "当前版本",
+      latestVersion: "最新版本",
+      publishedAt: "发布时间",
+      releaseNotes: "本次更新",
+      manualBadge: "手动升级",
+      requiredBadge: "必须更新",
+      viewRelease: "查看发布页",
+      downloadZip: "下载最新版本",
+      dismiss: "稍后提醒",
+      skipVersion: "跳过此版本",
+      close: "关闭",
+      blockedTitle: "需要手动升级扩展",
+      blockedBody: "当前版本 {current} 已不再受支持，请升级到 {min} 或更高版本后继续使用。",
+      blockedStep1: "下载最新 ZIP 包",
+      blockedStep2: "用新文件替换本地扩展目录",
+      blockedStep3: "打开 chrome://extensions 并点击“重新加载”",
+      notesFallback: "当前发布没有附带详细更新说明。",
+      unknown: "未知"
+    },
+    en: {
+      updateTitle: "New version available",
+      updateBody: "You are on {current}. Version {latest} is available. Download the new build, replace the local extension folder, then reload it from chrome://extensions.",
+      currentVersion: "Current version",
+      latestVersion: "Latest version",
+      publishedAt: "Published",
+      releaseNotes: "What changed",
+      manualBadge: "Manual update",
+      requiredBadge: "Update required",
+      viewRelease: "Open release",
+      downloadZip: "Download ZIP",
+      dismiss: "Later",
+      skipVersion: "Skip this version",
+      close: "Close",
+      blockedTitle: "Manual update required",
+      blockedBody: "Your current version ({current}) is no longer supported. Please update to {min} or later to keep using Claw.",
+      blockedStep1: "Download the latest ZIP",
+      blockedStep2: "Replace the local extension folder",
+      blockedStep3: "Open chrome://extensions and click Reload",
+      notesFallback: "This release did not include detailed notes.",
+      unknown: "Unknown"
+    }
+  };
   const CARD_CLASS = "relative w-full sm:max-w-[560px] pointer-events-auto bg-bg-000 border-[0.5px] border-border-300 rounded-[14px] overflow-hidden";
   const CLOSE_BUTTON_CLASS = "absolute top-4 right-4 z-10 inline-flex items-center justify-center bg-bg-100 border border-border-300 rounded-full hover:bg-bg-200 transition-colors";
   const PRIMARY_BUTTON_CLASS = "px-[14px] py-2 bg-brand-200 text-oncolor-100 rounded-[14px] hover:bg-brand-100 transition-colors font-ui font-medium text-[14px]";
@@ -80,6 +83,34 @@
   let state = null;
   let refreshScheduled = false;
   let snoozedVersion = "";
+  let lastLocaleKey = "";
+  const strings = new Proxy({}, {
+    get(_target, key) {
+      return getStrings()[key];
+    }
+  });
+
+  function getLocaleOptions() {
+    return {
+      document,
+      navigatorLanguage: navigator.language,
+      ignoredSelectors: ["#" + ROOT_ID],
+      zhPageHints: ["请先配置自定义模型供应商", "配置你的模型供应商", "新建会话", "独立窗口", "会话管理", "提示词修改", "最近会话", "输入 / 查看命令", "无障碍可跳转执行"],
+      enPagePatterns: [/\bOpen your settings page\b/i, /\bNew session\b/i, /\bOpen in window\b/i, /\bChange language\b/i, /\bRecent sessions\b/i, /\bType \/ for commands\b/i]
+    };
+  }
+
+  function getLocaleKey() {
+    return detectUiLocaleKey(getLocaleOptions());
+  }
+
+  function getLocaleTag() {
+    return getUiLocaleTag(getLocaleOptions());
+  }
+
+  function getStrings() {
+    return STRINGS[getLocaleKey()];
+  }
 
   function interpolate(template, values) {
     return String(template || "").replace(/\{(\w+)\}/g, function (_, key) {
@@ -130,7 +161,7 @@
     if (!value) {
       return strings.unknown;
     }
-    return formatTimestamp(value, localeKey === "zh" ? "zh-CN" : "en-US") || String(value);
+    return formatTimestamp(value, getLocaleTag()) || String(value);
   }
 
   function createSection(label, value) {
@@ -306,6 +337,7 @@
   }
 
   function render() {
+    lastLocaleKey = getLocaleKey();
     const mount = ensureRoot();
     mount.textContent = "";
     if (!state) {
@@ -351,14 +383,33 @@
         scheduleRefresh();
       }
     });
-    const observer = new MutationObserver(function () {
+    const observer = new MutationObserver(function (mutations) {
+      const nextRoot = root;
+      const isSelfMutation = !!nextRoot && Array.isArray(mutations) && mutations.length > 0 && mutations.every(function (mutation) {
+        const target = mutation.target;
+        if (target === nextRoot || nextRoot.contains(target)) {
+          return true;
+        }
+        return Array.from(mutation.addedNodes || []).every(function (node) {
+          return node === nextRoot || nextRoot.contains(node);
+        });
+      });
+      if (isSelfMutation) {
+        return;
+      }
       if (!root || !root.isConnected) {
         ensureRoot();
+        render();
+        return;
+      }
+      const nextLocaleKey = getLocaleKey();
+      if (nextLocaleKey !== lastLocaleKey) {
         render();
       }
     });
     observer.observe(document.body, {
-      childList: true
+      childList: true,
+      subtree: true
     });
   }
 

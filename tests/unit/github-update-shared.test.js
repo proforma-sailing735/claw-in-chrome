@@ -31,6 +31,41 @@ function createFixedDate(isoString) {
   return FixedDate;
 }
 
+function createLocaleProbeDocument(options = {}) {
+  const attributes = Array.isArray(options.attributes) ? options.attributes : [];
+  const nodes = attributes.map(function (entry) {
+    const values = entry && typeof entry === "object" ? entry : {};
+    return {
+      getAttribute(name) {
+        return Object.prototype.hasOwnProperty.call(values, name) ? values[name] : "";
+      },
+      closest(selector) {
+        const ignoredSelector = String(values.ignoredSelector || "").trim();
+        if (!ignoredSelector || !selector) {
+          return null;
+        }
+        return String(selector).split(",").map(function (item) {
+          return item.trim();
+        }).includes(ignoredSelector) ? {
+          matches: ignoredSelector
+        } : null;
+      }
+    };
+  });
+  return {
+    documentElement: {
+      lang: options.lang || ""
+    },
+    body: {
+      innerText: options.bodyText || "",
+      textContent: options.bodyText || "",
+      querySelectorAll() {
+        return nodes;
+      }
+    }
+  };
+}
+
 function createSharedHarness(options = {}) {
   const chromeMock = createChromeMock({
     manifestVersion: options.manifestVersion || "1.0.0.0",
@@ -167,6 +202,36 @@ function testNormalizeLatestPayloadUsesFixedClockAndValidatesVersion() {
   }, /有效版本号/);
 }
 
+function testLocaleReadersIncludeAccessibleUiAttributes() {
+  const { shared } = createSharedHarness({});
+  const document = createLocaleProbeDocument({
+    attributes: [{
+      placeholder: "输入 / 查看命令"
+    }, {
+      title: "Recent sessions"
+    }, {
+      "aria-label": "应被忽略的中文",
+      ignoredSelector: "#ignored-root"
+    }]
+  });
+
+  assert.equal(
+    shared.readDocumentText({
+      document,
+      ignoredSelectors: ["#ignored-root"]
+    }),
+    "输入 / 查看命令 Recent sessions"
+  );
+
+  assert.equal(shared.detectUiLocaleKey({
+    document,
+    navigatorLanguage: "en-US",
+    ignoredSelectors: ["#ignored-root"],
+    zhPageHints: ["输入 / 查看命令"],
+    enPagePatterns: [/\bRecent sessions\b/i]
+  }), "zh");
+}
+
 async function testReadStoredStateAndOpenPagesUseChromeTabs() {
   const { shared, tabCreateCalls } = createSharedHarness({
     manifestVersion: "3.0.0.0",
@@ -230,6 +295,7 @@ async function main() {
   testVersionHelpersAndSummaries();
   testNormalizeStoredInfoUsesAliasesAndDefaults();
   testNormalizeLatestPayloadUsesFixedClockAndValidatesVersion();
+  testLocaleReadersIncludeAccessibleUiAttributes();
   await testReadStoredStateAndOpenPagesUseChromeTabs();
   await testOpenUrlFallsBackToWindowOpen();
   console.log("github update shared tests passed");

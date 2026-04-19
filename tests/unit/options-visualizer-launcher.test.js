@@ -190,7 +190,8 @@ class FakeDocument {
 
 function createVisualizerHarness(options = {}) {
   const chromeMock = createChromeMock({
-    runtimeId: "visualizer-test-extension"
+    runtimeId: "visualizer-test-extension",
+    storageState: options.storageState || {}
   });
   const tabCreateCalls = [];
   const windowOpenCalls = [];
@@ -300,11 +301,51 @@ async function testLauncherRendersPanelAndOpensVisualizerTab() {
   const button = panel.querySelector("[data-cp-visualizer-launch]");
   assert.ok(button, "visualizer button should exist");
   button.onclick();
+  await flushMicrotasks();
 
   assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
-    url: "chrome-extension://visualizer-test-extension/visualizer.html"
+    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=en-US"
   }]);
   assert.deepEqual(harness.windowOpenCalls, []);
+}
+
+async function testLauncherPassesChineseLocaleToVisualizer() {
+  const harness = createVisualizerHarness({
+    navigatorLanguage: "en-US",
+    bodyText: "Claw in Chrome 设置 扩展更新 选项",
+    updateTitle: "扩展更新"
+  });
+
+  await harness.flushRenders();
+
+  const panel = harness.document.getElementById("cp-options-visualizer-panel");
+  const button = panel.querySelector("[data-cp-visualizer-launch]");
+  button.onclick();
+  await flushMicrotasks();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
+    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=zh-CN"
+  }]);
+}
+
+async function testLauncherUsesStoredPreferredLocaleForTargetUrl() {
+  const harness = createVisualizerHarness({
+    navigatorLanguage: "en-US",
+    storageState: {
+      preferred_locale: "zh-CN"
+    }
+  });
+
+  await harness.flushRenders();
+
+  const panel = harness.document.getElementById("cp-options-visualizer-panel");
+  const button = panel.querySelector("[data-cp-visualizer-launch]");
+  button.onclick();
+  await flushMicrotasks();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
+    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=zh-CN"
+  }]);
 }
 
 async function testLauncherShowsOpenErrorWhenTabAndWindowCreationFail() {
@@ -317,6 +358,7 @@ async function testLauncherShowsOpenErrorWhenTabAndWindowCreationFail() {
 
   const panel = harness.document.getElementById("cp-options-visualizer-panel");
   panel.querySelector("[data-cp-visualizer-launch]").onclick();
+  await flushMicrotasks();
   await harness.flushRenders();
 
   assert.equal(harness.windowOpenCalls.length, 1);
@@ -337,6 +379,8 @@ async function testLauncherRemovesPanelOutsideRootOptionsView() {
 
 async function main() {
   await testLauncherRendersPanelAndOpensVisualizerTab();
+  await testLauncherPassesChineseLocaleToVisualizer();
+  await testLauncherUsesStoredPreferredLocaleForTargetUrl();
   await testLauncherShowsOpenErrorWhenTabAndWindowCreationFail();
   await testLauncherRemovesPanelOutsideRootOptionsView();
   console.log("options visualizer launcher tests passed");

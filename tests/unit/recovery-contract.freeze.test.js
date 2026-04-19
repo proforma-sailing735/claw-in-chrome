@@ -64,6 +64,7 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(Object.isFrozen(contract.prompts), true);
   assert.equal(Object.isFrozen(contract.workflows), true);
   assert.equal(Object.isFrozen(contract.models), true);
+  assert.equal(Object.isFrozen(contract.ui), true);
   assert.equal(Object.isFrozen(contract.customProvider), true);
   assert.equal(Object.isFrozen(contract.permissionManager), true);
   assert.equal(Object.isFrozen(contract.nativeMessaging), true);
@@ -97,6 +98,7 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(contract.prompts.ACTIVE_PROFILE_STORAGE_KEY, "customSystemPromptActiveProfileId");
   assert.equal(contract.workflows.STORAGE_KEY, "claw_site_workflows_v1");
   assert.equal(contract.models.CONFIG_STORAGE_KEY, "chrome_ext_models");
+  assert.equal(contract.ui.PREFERRED_LOCALE_STORAGE_KEY, "preferred_locale");
   assert.equal(contract.permissionManager.UPDATE_AVAILABLE_STORAGE_KEY, "updateAvailable");
   assert.equal(contract.permissionManager.SAVED_PROMPTS_STORAGE_KEY, "savedPrompts");
   assert.equal(contract.offscreen.KEEPALIVE_INTERVAL_MS, 20000);
