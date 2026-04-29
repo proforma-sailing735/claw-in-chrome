@@ -1,9 +1,14 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const rootDir = path.join(__dirname, "..", "..");
 const sidepanelPath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
+const sidepanelInlineProviderCssPath = path.join(rootDir, "sidepanel-inline-provider.css");
+const enUsMessagesPath = path.join(rootDir, "i18n", "en-US.json");
+const zhCnMessagesPath = path.join(rootDir, "i18n", "zh-CN.json");
+const zhTwMessagesPath = path.join(rootDir, "i18n", "zh-TW.json");
 const permissionManagerPath = path.join(rootDir, "assets", "PermissionManager-9s959502.js");
 const mcpPermissionsPath = path.join(rootDir, "assets", "mcpPermissions-qqAoJjJ8.js");
 const accessibilityTreeBundlePath = path.join(rootDir, "assets", "accessibility-tree.js-D8KNCIWO.js");
@@ -48,6 +53,241 @@ function assertIncludes(source, needle, label) {
     true,
     `${label} should include ${needle}`,
   );
+}
+
+async function testCompactConversationCompactsWithoutTdz() {
+  const source = read(sidepanelPath);
+  const start = source.indexOf("class WX {");
+  const end = source.indexOf("function qX", start);
+  assert.notEqual(start, -1, "sidepanel bundle should include compact conversation service");
+  assert.notEqual(end, -1, "compact conversation service should end before qX helper");
+
+  const compactServiceSource = source.slice(start, end);
+  const sandbox = {
+    ZX: {
+      calculateMetricsFromMessages(messages, maxOutputTokens, contextWindow) {
+        assert.equal(Array.isArray(messages), true);
+        assert.equal(maxOutputTokens, 4096);
+        assert.equal(contextWindow, 200000);
+        return {
+          totalTokens: 1234,
+        };
+      },
+    },
+    _: async (key) => {
+      assert.equal(key, "zepher_prompt");
+      return {};
+    },
+  };
+  const CompactConversationService = vm.runInNewContext(
+    `${compactServiceSource}\nWX;`,
+    sandbox,
+  );
+
+  let createMessagePayload = null;
+  const service = new CompactConversationService(async (payload) => {
+    createMessagePayload = payload;
+    return {
+      content: [
+        {
+          type: "text",
+          text: "<analysis>checked</analysis>\n<summary>summary body</summary>",
+        },
+      ],
+    };
+  });
+
+  const result = await service.compactConversation(
+    [
+      {
+        role: "user",
+        content: "hello",
+      },
+      {
+        role: "assistant",
+        content: "hi",
+      },
+    ],
+    4096,
+    true,
+    200000,
+  );
+
+  assert.ok(createMessagePayload, "compact should reach createMessage");
+  assert.equal(createMessagePayload.messages.length, 3);
+  assert.equal(createMessagePayload.messages[0].role, "user");
+  assert.equal(createMessagePayload.messages[1].role, "assistant");
+  assert.equal(createMessagePayload.messages[2].role, "user");
+  assert.equal(result.summaryMessage.isCompactSummary, true);
+  assert.equal(result.messagesAfterCompacting.length, 2);
+  assert.equal(result.messagesAfterCompacting[0].isCompactionMessage, true);
+  assert.equal(result.preCompactTokenCount, 1234);
+  assert.equal(Number.isFinite(result.postCompactTokenCount), true);
+  assert.equal(Number.isFinite(result.tokensSaved), true);
+  assert.equal(result.tokensSaved > 0, true);
+}
+
+async function testSidepanelContextUsageIndicatorAnchorsExist() {
+  const source = read(sidepanelPath);
+  const css = read(sidepanelInlineProviderCssPath);
+  const enUs = JSON.parse(read(enUsMessagesPath));
+  const zhCn = JSON.parse(read(zhCnMessagesPath));
+  const zhTw = JSON.parse(read(zhTwMessagesPath));
+
+  assertIncludes(source, "function __cpBuildContextUsageMetrics", "context usage indicator");
+  assertIncludes(source, "function __cpContextUsageIndicator", "context usage indicator");
+  assertIncludes(source, "\"data-testid\": \"context-usage-indicator\"", "context usage indicator");
+  assertIncludes(source, "role: \"meter\"", "context usage indicator");
+  assertIncludes(source, "id: \"cpContextUsageLabel\"", "context usage indicator");
+  assertIncludes(source, "className: \"cp-context-usage-tooltip\"", "context usage indicator");
+  assertIncludes(source, "const __cpDisplayContextWindow = __cpNormalizeContextWindow(n.contextWindow);", "context usage indicator display window");
+  assertIncludes(source, "ZX.calculateProjectedMetricsFromMessages(Array.isArray(e) ? e : [], 0, __cpDisplayContextWindow)", "context usage indicator display window");
+  assertIncludes(source, "contextWindow: t.contextWindow", "custom provider context usage config");
+  assertIncludes(css, ".cp-context-usage-indicator", "context usage indicator styles");
+  assertIncludes(css, ".cp-context-usage-tooltip", "context usage indicator styles");
+  assertIncludes(css, ".cp-context-usage-indicator[data-tone=\"warning\"]", "context usage indicator styles");
+  assertIncludes(css, ".cp-context-usage-indicator[data-tone=\"danger\"]", "context usage indicator styles");
+  assert.equal(
+    enUs.cpContextUsageLabel,
+    "Context usage: {percent}% ({total} / {window})",
+  );
+  assert.equal(
+    zhCn.cpContextUsageLabel,
+    "上下文占用：{percent}%（{total} / {window}）",
+  );
+  assert.equal(
+    zhTw.cpContextUsageLabel,
+    "上下文佔用：{percent}%（{total} / {window}）",
+  );
+}
+
+async function testSidepanelContextUsageIndicatorUsesConfiguredWindowForDisplay() {
+  const source = read(sidepanelPath);
+  const zxStart = source.indexOf("const ZX = new class {");
+  const zxEnd = source.indexOf("function __cpFormatContextUsageTokenCount", zxStart);
+  const normalizeStart = source.indexOf("function __cpNormalizeContextWindow");
+  const normalizeEnd = source.indexOf("function __cpIsCustomProviderPrivacyMode", normalizeStart);
+  const builderStart = source.indexOf("function __cpBuildContextUsageMetrics");
+  const builderEnd = source.indexOf("function __cpContextUsageIndicator", builderStart);
+
+  assert.notEqual(zxStart, -1, "sidepanel bundle should include token metrics helper");
+  assert.notEqual(zxEnd, -1, "token metrics helper should end before context usage helpers");
+  assert.notEqual(normalizeStart, -1, "sidepanel bundle should include context window normalizer");
+  assert.notEqual(normalizeEnd, -1, "context window normalizer should end before provider mode helper");
+  assert.notEqual(builderStart, -1, "sidepanel bundle should include context usage metrics builder");
+  assert.notEqual(builderEnd, -1, "context usage metrics builder should end before indicator component");
+
+  const { ZX, __cpBuildContextUsageMetrics } = vm.runInNewContext(
+    `${source.slice(zxStart, zxEnd)}
+${source.slice(normalizeStart, normalizeEnd)}
+${source.slice(builderStart, builderEnd)}
+({ ZX, __cpBuildContextUsageMetrics });`,
+    {},
+  );
+  const messages = [
+    {
+      role: "user",
+      content: "hello",
+    },
+  ];
+
+  const rawProjectedMetrics = ZX.calculateProjectedMetricsFromMessages(messages, 10000, 40000);
+  assert.equal(rawProjectedMetrics.contextWindow, 30000);
+
+  const displayMetrics = __cpBuildContextUsageMetrics(messages, {
+    contextWindow: 40000,
+    maxOutputTokens: 10000,
+  });
+  assert.equal(displayMetrics.contextWindow, 40000);
+}
+
+async function testSidepanelStripsCustomToolTypeForCustomAnthropicProviders() {
+  const source = read(sidepanelPath);
+  const start = source.indexOf("function __cpNormalizeProviderFormat");
+  const end = source.indexOf("function __cpNormalizeAnthropicClientBaseUrl", start);
+
+  assert.notEqual(start, -1, "sidepanel bundle should include provider format normalizer");
+  assert.notEqual(end, -1, "provider tool normalizer should end before anthropic base URL helper");
+  assertIncludes(source, "const __cpToolsForProvider = __cpNormalizeCustomAnthropicToolsForProvider(D || [], __cpResolvedProviderConfig, __cpHasUsableProviderConfig);", "custom anthropic provider tool normalization");
+  assertIncludes(source, "tools: __cpToolsForProvider", "custom anthropic provider tool normalization");
+
+  const { __cpNormalizeCustomAnthropicToolsForProvider } = vm.runInNewContext(
+    `${source.slice(start, end)}
+({ __cpNormalizeCustomAnthropicToolsForProvider });`,
+    {},
+  );
+  const customTool = {
+    type: "custom",
+    name: "turn_answer_start",
+    description: "marker",
+    input_schema: {
+      type: "object",
+      properties: {},
+    },
+  };
+  const webSearchTool = {
+    type: "web_search_20260209",
+    name: "web_search",
+  };
+  const regularTool = {
+    name: "computer",
+    input_schema: {
+      type: "object",
+    },
+  };
+  const tools = [customTool, webSearchTool, regularTool];
+
+  const normalized = __cpNormalizeCustomAnthropicToolsForProvider(
+    tools,
+    {
+      format: "anthropic",
+      baseUrl: "https://api.deepseek.example/v1/messages",
+    },
+    true,
+  );
+
+  assert.notEqual(normalized, tools);
+  assert.equal("type" in normalized[0], false);
+  assert.equal(normalized[0].name, "turn_answer_start");
+  assert.equal(customTool.type, "custom");
+  assert.equal(normalized[1], webSearchTool);
+  assert.equal(normalized[2], regularTool);
+  assert.equal(
+    __cpNormalizeCustomAnthropicToolsForProvider(tools, { format: "openai_chat" }, true),
+    tools,
+  );
+  assert.equal(
+    __cpNormalizeCustomAnthropicToolsForProvider(tools, { format: "anthropic" }, false),
+    tools,
+  );
+}
+
+async function testSidepanelCompactionBlocksConcurrentSendAnchorsExist() {
+  const source = read(sidepanelPath);
+
+  assertIncludes(source, "isCompacting: __cpIsCompacting = false", "compaction send guard");
+  assertIncludes(source, "const __cpInputDisabled = __cpSurfaceBlocked || __cpIsCompacting;", "compaction send guard");
+  assertIncludes(source, "if ((n.trim() || t) && !y && !__cpIsCompacting && !s && !c && !__cpSurfaceBlocked) {", "compaction send guard");
+  assertIncludes(source, "disabled: !n.trim() && r.length === 0 || r.some(e => e.error) || c || __cpSurfaceBlocked || __cpIsCompacting", "compaction send guard");
+  assertIncludes(source, "isCompacting: kt", "compaction send guard");
+  assertIncludes(source, "if (r.pendingContinue && !xt && !kt) {", "compaction send guard");
+  assertIncludes(source, "if ((o.inputText.trim() || e) && !xt && !kt && (W || Z || n)) {", "compaction send guard");
+  assertIncludes(source, "__cpPanelDebugLog(__cpIsDuplicateSend ? \"chat.send_duplicate_blocked\" : \"chat.send_busy_blocked\"", "compaction send guard");
+  assertIncludes(source, "__cpPanelDebugLog(D ? \"chat.send_compacting_blocked\" : \"chat.send_loading_blocked\"", "compaction send guard");
+  assertIncludes(source, "__cpPanelDebugLog(\"chat.retry_busy_blocked\"", "compaction send guard");
+  assertIncludes(source, "if (!n && !__cpIsCompacting && (h || p) && c.trim()) {", "runtime input bridge compaction guard");
+  assertIncludes(source, "if (!n && !__cpIsCompacting && (h || p) && e.trim() && m) {", "runtime input bridge compaction guard");
+}
+
+async function testSidepanelRetriesTransientStreamErrorsAnchorsExist() {
+  const source = read(sidepanelPath);
+
+  assertIncludes(source, "function __cpIsRetryableTransientChatError", "transient stream retry guard");
+  assertIncludes(source, "t.startsWith(\"stream error\")", "transient stream retry guard");
+  assertIncludes(source, "t.includes(\"internal_error\")", "transient stream retry guard");
+  assertIncludes(source, "t.includes(\"received from peer\")", "transient stream retry guard");
+  assertIncludes(source, "__cpPanelDebugLog(\"chat.retry_transient_error\"", "transient stream retry guard");
+  assertIncludes(source, "} else if (__cpIsRetryableTransientChatError(n) && g + 1 < m) {", "transient stream retry guard");
 }
 
 async function testSidepanelAnchorsExist() {
@@ -1234,6 +1474,12 @@ async function testTaskPlanMentionsThirdRoundClosure() {
 }
 
 async function main() {
+  await testCompactConversationCompactsWithoutTdz();
+  await testSidepanelContextUsageIndicatorAnchorsExist();
+  await testSidepanelContextUsageIndicatorUsesConfiguredWindowForDisplay();
+  await testSidepanelStripsCustomToolTypeForCustomAnthropicProviders();
+  await testSidepanelCompactionBlocksConcurrentSendAnchorsExist();
+  await testSidepanelRetriesTransientStreamErrorsAnchorsExist();
   await testSidepanelAnchorsExist();
   await testServiceWorkerBundleAnchorsExist();
   await testAccessibilityTreeAnchorsExist();

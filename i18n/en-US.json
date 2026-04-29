@@ -519,6 +519,7 @@
   "bk8tuJl/tJ": "Select report reason",
   "bmDayxG7DJ": "Malicious code buried in sites may override your instructions in order to steal your data, inject malware into your systems, or take over your system to attack other users. {learnMoreLink}",
   "c0/oTKLaf+": "Skip permissions",
+  "cpContextUsageLabel": "Context usage: {percent}% ({total} / {window})",
   "c0ZeCgLvCL": "Conversation summary",
   "c5+JRMBv/Y": "Upgrade plan",
   "cELBBLzSZE": "Claw wants to {toolAction}:",

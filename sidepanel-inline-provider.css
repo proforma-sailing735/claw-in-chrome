@@ -380,6 +380,64 @@
   font-size: 12px;
 }
 
+.cp-context-usage-indicator {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: hsl(var(--text-500));
+  cursor: help;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.cp-context-usage-indicator:hover {
+  background: hsl(var(--bg-200));
+  color: hsl(var(--text-300));
+}
+
+.cp-context-usage-indicator:active {
+  transform: scale(0.95);
+}
+
+.cp-context-usage-indicator svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.cp-context-usage-indicator__track {
+  stroke: hsl(var(--border-300) / 0.28);
+}
+
+.cp-context-usage-indicator__value {
+  stroke: currentColor;
+  transition:
+    stroke-dashoffset 0.2s ease,
+    stroke 0.16s ease;
+}
+
+.cp-context-usage-indicator[data-tone="warning"] {
+  color: hsl(var(--warning-100));
+}
+
+.cp-context-usage-indicator[data-tone="danger"] {
+  color: hsl(var(--danger-000));
+}
+
+.cp-context-usage-tooltip {
+  width: max-content;
+  min-width: 0;
+  max-width: none !important;
+  white-space: nowrap;
+  text-align: left;
+}
+
 @media (max-width: 560px) {
   .cp-inline-overlay {
     padding: 14px;
