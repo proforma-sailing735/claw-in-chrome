@@ -81280,6 +81280,7 @@ function YY({
   shouldDisableSkipPermissions: m,
   messages: g,
   isAgentRunning: y,
+  isCompacting: __cpIsCompacting = false,
   recordingState: v,
   isSpeechRecording: x,
   isSpeechSupported: w,
@@ -81336,16 +81337,17 @@ function YY({
   const __cpBlockedSurfaceCopy = String(ye?.locale || "").toLowerCase().startsWith("zh") ? "请关闭\"最近会话\"窗口后继续" : "Please close the \"Recent sessions\" window to continue";
   const ve = a.useRef(null);
   const [xe, be] = a.useState(true);
+  const __cpInputDisabled = __cpSurfaceBlocked || __cpIsCompacting;
   const we = a.useCallback(e => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent?.isComposing) {
       e.preventDefault();
       const t = r.some(e => !e.error);
       const s = r.some(e => e.error);
-      if ((n.trim() || t) && !y && !s && !c && !__cpSurfaceBlocked) {
+      if ((n.trim() || t) && !y && !__cpIsCompacting && !s && !c && !__cpSurfaceBlocked) {
         T();
       }
     }
-  }, [r, n, y, c, __cpSurfaceBlocked, T]);
+  }, [r, n, y, __cpIsCompacting, c, __cpSurfaceBlocked, T]);
   const ke = a.useCallback(e => {
     s("");
     L(e);
@@ -81373,6 +81375,15 @@ function YY({
       P(t);
     }
   }, [P]);
+  const __cpContextUsageMetrics = a.useMemo(() => __cpBuildContextUsageMetrics(g, K), [g, K]);
+  const __cpContextUsageLabel = __cpContextUsageMetrics ? ye.formatMessage({
+    defaultMessage: "Context usage: {percent}% ({total} / {window})",
+    id: "cpContextUsageLabel"
+  }, {
+    percent: Math.max(0, Math.min(100, Math.round(Number(__cpContextUsageMetrics.percentUsed) || 0))),
+    total: __cpFormatContextUsageTokenCount(__cpContextUsageMetrics.totalTokens),
+    window: __cpFormatContextUsageTokenCount(__cpContextUsageMetrics.contextWindow)
+  }) : "";
   return l.jsxs("div", {
     className: "mx-3 md:mx-0",
     children: [!v.isRecording && l.jsx(BR, {
@@ -81568,7 +81579,7 @@ function YY({
                     onEmptyChange: be,
                     onKeyDown: we,
                     onPaste: S,
-                    disabled: __cpSurfaceBlocked,
+                    disabled: __cpInputDisabled,
                       placeholder: g.length === 0 ? "" : __cpSurfaceBlocked ? __cpBlockedSurfaceCopy : ye.formatMessage({
                         defaultMessage: "Reply to Claw",
                         id: "l+dE/S7JbF"
@@ -81731,7 +81742,10 @@ function YY({
                     })]
                   })]
                 }) : l.jsxs(l.Fragment, {
-                  children: [oe && l.jsx(J, {
+                  children: [__cpContextUsageMetrics && l.jsx(__cpContextUsageIndicator, {
+                    metrics: __cpContextUsageMetrics,
+                    label: __cpContextUsageLabel
+                  }), oe && l.jsx(J, {
                     tooltipContent: ye.formatMessage({
                       defaultMessage: "Teach Claw",
                       id: "cXTNE0Hbj4"
@@ -81760,7 +81774,7 @@ function YY({
                     children: l.jsx(QN, {
                       onScreenshot: () => A(),
                       onUpload: () => de.current?.click(),
-                      disabled: i || ae,
+                      disabled: i || ae || __cpIsCompacting,
                       currentUrl: le,
                       showConnectors: false,
                       isAgentRunning: y
@@ -81789,7 +81803,7 @@ function YY({
                   }) : l.jsx("button", {
                     "data-test-id": "send-button",
                     onClick: T,
-                    disabled: !n.trim() && r.length === 0 || r.some(e => e.error) || c || __cpSurfaceBlocked,
+                    disabled: !n.trim() && r.length === 0 || r.some(e => e.error) || c || __cpSurfaceBlocked || __cpIsCompacting,
                     className: "inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none font-medium transition-colors h-7 w-7 rounded-lg active:scale-95 " + (u === "skip_all_permission_checks" ? "bg-[#BF8534] hover:bg-[#A06F2C] text-white" : "bg-brand-000 hover:bg-brand-200 text-oncolor-100"),
                     type: "button",
                     "aria-label": ye.formatMessage({
@@ -86195,6 +86209,76 @@ const ZX = new class {
     return `${e.totalTokens.toLocaleString()} / ${e.contextWindow.toLocaleString()} tokens${e.cacheTokens > 0 ? ` (${e.cacheTokens.toLocaleString()} cached)` : ""}`;
   }
 }();
+function __cpFormatContextUsageTokenCount(e) {
+  const t = Math.max(0, Math.round(Number(e) || 0));
+  if (t >= 1000000) {
+    const e = Math.round(t / 100000) / 10;
+    return `${Number.isInteger(e) ? e.toFixed(0) : e}M`;
+  }
+  if (t >= 1000) {
+    const e = Math.round(t / 100) / 10;
+    return `${Number.isInteger(e) ? e.toFixed(0) : e}k`;
+  }
+  return String(t);
+}
+function __cpBuildContextUsageMetrics(e, t) {
+  const n = t && typeof t == "object" ? t : {};
+  const __cpDisplayContextWindow = __cpNormalizeContextWindow(n.contextWindow);
+  return ZX.calculateProjectedMetricsFromMessages(Array.isArray(e) ? e : [], 0, __cpDisplayContextWindow);
+}
+function __cpContextUsageIndicator({
+  metrics: e,
+  label: t
+}) {
+  if (!e) {
+    return null;
+  }
+  const n = Math.max(0, Math.min(100, Math.round(Number(e.percentUsed) || 0)));
+  const s = 2 * Math.PI * 7;
+  const r = s * (1 - n / 100);
+  const i = e.isError ? "danger" : e.isWarning || n >= 90 ? "warning" : "normal";
+  const o = t || `Context usage: ${n}% used`;
+  return l.jsx(J, {
+    tooltipContent: o,
+    className: "cp-context-usage-tooltip",
+    side: "top",
+    children: l.jsx("div", {
+      className: "cp-context-usage-indicator",
+      "data-tone": i,
+      "data-testid": "context-usage-indicator",
+      role: "meter",
+      "aria-label": o,
+      "aria-valuemin": 0,
+      "aria-valuemax": 100,
+      "aria-valuenow": n,
+      title: o,
+      children: l.jsxs("svg", {
+        viewBox: "0 0 18 18",
+        "aria-hidden": "true",
+        focusable: "false",
+        children: [l.jsx("circle", {
+          className: "cp-context-usage-indicator__track",
+          cx: "9",
+          cy: "9",
+          r: "7",
+          fill: "none",
+          strokeWidth: "3"
+        }), l.jsx("circle", {
+          className: "cp-context-usage-indicator__value",
+          cx: "9",
+          cy: "9",
+          r: "7",
+          fill: "none",
+          strokeWidth: "3",
+          strokeLinecap: "round",
+          strokeDasharray: s,
+          strokeDashoffset: r,
+          transform: "rotate(-90 9 9)"
+        })]
+      })
+    })
+  });
+}
 const __cpSafeUsage = e => e && typeof e == "object" ? {
   input_tokens: Number.isFinite(Number(e.input_tokens)) ? Number(e.input_tokens) : 0,
   output_tokens: Number.isFinite(Number(e.output_tokens)) ? Number(e.output_tokens) : 0,
@@ -86217,7 +86301,7 @@ class WX {
       throw new Error("Not enough messages to compact");
     }
     const r = ZX.calculateMetricsFromMessages(e, t, s);
-    const i = r?.totalTokens || 0;
+    const __cpPreCompactTokenCount = r?.totalTokens || 0;
     const o = await async function () {
       try {
         const e = await _("zepher_prompt");
@@ -86227,15 +86311,15 @@ class WX {
       } catch (e) {}
       return "Your task is to create a detailed summary of the conversation so far, with EXTREME EMPHASIS on preserving ALL user instructions, requirements, and feedback. User instructions are the most critical element and must be preserved verbatim when possible.\n\nBefore providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. In your analysis process:\n\n1. CRITICAL - Extract ALL user instructions:\n   - The initial task definition (preserve as close to verbatim as possible)\n   - Any modifications or clarifications to the task\n   - Specific requirements, criteria, or rules they provided\n   - Warnings, constraints, or \"DO NOT\" instructions\n   - Any feedback that changed your approach\n   - Instructions about how to continue or when to stop\n\n2. Identify if this is a REPEATABLE TASK WORKFLOW:\n   - Is there a pattern being repeated (e.g., reviewing multiple candidates, processing multiple items)?\n   - What is the atomic unit of work being repeated?\n   - What are the specific steps in each iteration?\n   - What decision criteria or rules are being applied consistently?\n\n3. Chronologically analyze each message and section of the conversation. For each section thoroughly identify:\n   - The user's explicit requests and intents\n   - Your approach to addressing the user's requests\n   - Key browser interactions and automation steps\n   - Specific details like:\n     - URLs visited\n     - Elements clicked or interacted with\n     - Form data entered\n     - Screenshots taken\n     - Navigation patterns\n   - Errors that you ran into and how you fixed them\n   - Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.\n\n4. Double-check that you have captured EVERY user instruction, especially:\n   - Initial requirements\n   - Process modifications\n   - Corrections to your behavior\n   - Explicit \"IMPORTANT\" or emphasized instructions\n\nYour summary should include the following sections:\n\n1. USER INSTRUCTIONS (MOST CRITICAL): Preserve verbatim or as close as possible:\n   - Complete initial task definition\n   - ALL specific requirements and criteria\n   - Every \"IMPORTANT\", \"DO NOT\", \"ALWAYS\", \"MUST\" instruction\n   - Process modifications and corrections\n   - Feedback that changed behavior\n   - Instructions about when/how to continue\n\n2. Task Template (if applicable): If this is a repeatable workflow, describe:\n   - The pattern/template of the repeated task\n   - Complete decision criteria and evaluation rules\n   - Standard workflow steps for each iteration\n   - Example of a completed iteration\n\n3. Constraints and Rules: Organize all user-specified rules:\n   - Critical constraints that must never be violated\n   - Specific acceptance/rejection criteria\n   - Process requirements and warnings\n   - Edge cases and exceptions\n\n4. Key Browser Context: Current page URL, domain, and any important page state\n\n5. Pages and Interactions: List all pages visited, elements interacted with, and actions taken\n\n6. Automation Steps: Document the sequence of browser automation steps performed\n\n7. Errors and fixes: List all errors that you ran into, and how you fixed them\n\n8. User Feedback History: Chronological list of:\n   - Initial instructions\n   - Corrections received\n   - Process refinements\n   - Confirmations or approvals\n\n9. Progress Tracking: For repeatable tasks:\n   - How many items have been processed\n   - Where we are in the current iteration\n   - Any items that need revisiting\n\n10. Current Work: Describe in detail precisely what was being worked on immediately before this summary request\n\n11. Next Step: For repeatable tasks, specify exactly where to resume (e.g., \"Continue reviewing candidates starting with the next one in the queue\")\n\nHere's an example of how your output should be structured:\n\n<example>\n<analysis>\n[Your thought process, identifying if this is a repeatable task, what the pattern is, and ensuring all points are covered thoroughly and accurately]\n</analysis>\n\n<summary>\n1. USER INSTRUCTIONS (MOST CRITICAL):\n   Initial Task: \"[Verbatim or near-verbatim initial request from user]\"\n\n   Key Requirements:\n   - [Specific requirement 1 as stated by user]\n   - [Specific requirement 2 as stated by user]\n\n   Critical Constraints:\n   - [Any DO NOT instruction from user]\n   - [Any MUST/ALWAYS instruction from user]\n\n   User Corrections/Feedback:\n   - [Any modification to original instructions]\n   - [Any correction to behavior]\n\n2. Task Template (if applicable):\n   - Pattern: Processing multiple items from a list/queue\n   - Decision Criteria:\n     * [Specific criteria for evaluation]\n     * [Required qualifications or attributes]\n     * [Disqualifying factors]\n   - Workflow Steps:\n     1. Navigate to item page\n     2. Review item details\n     3. Evaluate against criteria\n     4. Take appropriate action (approve/reject/modify)\n     5. Move to next item\n   - Example Iteration: [Brief description of one completed cycle]\n\n3. Constraints and Rules:\n   - IMPORTANT: [Key instructions that must always be followed]\n   - DO NOT: [Actions to avoid]\n   - ALWAYS: [Required behaviors]\n   - Edge cases: [Special handling instructions]\n\n4. Key Browser Context:\n   - Current URL: [Current page URL]\n   - Current Domain: [Domain]\n   - Page State: [Important state information]\n\n5. Pages and Interactions:\n   - [Page/Section]: [Actions taken]\n   - [Buttons/Forms]: [Interactions performed]\n\n6. Automation Steps:\n   - [Step-by-step workflow description]\n\n7. Errors and fixes:\n   - [Error description]: [How it was resolved]\n   - [User feedback on errors if any]\n\n8. User Feedback History:\n   - Initial: [Complete task definition]\n   - Corrections: [Any process refinements]\n   - Feedback: [Important guidance received]\n\n9. Progress Tracking:\n   - Processed: [Number and summary of items completed]\n   - Current: [What's being worked on now]\n   - Remaining: [What's left to do]\n\n10. Current Work:\n   [Precise description of the immediate task being performed]\n\n11. Next Step:\n   [Exactly what should be done next to continue the workflow]\n\n</summary>\n</example>\n\nPlease provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.";
     }();
-    const a = this.prepareMessagesForAPI(e);
-    a.push({
+    const __cpApiMessages = this.prepareMessagesForAPI(e);
+    __cpApiMessages.push({
       role: "user",
       content: o
     });
     try {
       const t = await this.createMessage({
         maxTokens: 10000,
-        messages: a,
+        messages: __cpApiMessages,
         system: [{
           type: "text",
           text: "You are a helpful AI assistant tasked with summarizing browser automation conversations."
@@ -86264,19 +86348,19 @@ class WX {
           return `${s}\n\nHow would you like to proceed?`;
         }
       }(this.extractTextFromResponse(t), n);
-      const i = {
+      const __cpSummaryMessage = {
         role: "user",
         content: s,
         isCompactSummary: true
       };
-      const a = this.preserveRecentContext(e);
+      const __cpRecentContext = this.preserveRecentContext(e);
       const l = [{
         role: "assistant",
         content: "This conversation has been summarized so we can keep going.",
         isCompactionMessage: true
-      }, i, ...a];
+      }, __cpSummaryMessage, ...__cpRecentContext];
       const c = 1600;
-      const u = Math.round(s.length / 4 + a.reduce((e, t) => {
+      const u = Math.round(s.length / 4 + __cpRecentContext.reduce((e, t) => {
         let n = 0;
         if (typeof t.content == "string") {
           n = t.content.length / 4;
@@ -86289,14 +86373,14 @@ class WX {
         return e + n;
       }, 0));
       return {
-        summaryMessage: i,
+        summaryMessage: __cpSummaryMessage,
         messagesAfterCompacting: l,
-        preCompactTokenCount: i,
+        preCompactTokenCount: __cpPreCompactTokenCount,
         postCompactTokenCount: u,
-        tokensSaved: Math.max(0, i - u)
+        tokensSaved: Math.max(0, __cpPreCompactTokenCount - u)
       };
-    } catch (a) {
-      throw new Error(`Failed to compact conversation: ${a}`);
+    } catch (__cpCompactError) {
+      throw new Error(`Failed to compact conversation: ${__cpCompactError}`);
     }
   }
   prepareMessagesForAPI(e) {
@@ -89172,11 +89256,12 @@ function CQ({
               __cpHasUsableProviderConfig = __cpIsCustomProviderPrivacyMode(__cpStoredProviderConfig);
             } catch (U) {}
             const __cpReasoningEffort = __cpHasUsableProviderConfig ? __cpNormalizeReasoningEffort(__cpResolvedProviderConfig.reasoningEffort) : "none";
+            const __cpToolsForProvider = __cpNormalizeCustomAnthropicToolsForProvider(D || [], __cpResolvedProviderConfig, __cpHasUsableProviderConfig);
             const C = {
               messages: p,
               model: CX(o.current),
               max_tokens: __cpHasUsableProviderConfig ? __cpResolvedProviderConfig.maxOutputTokens : __cpMaxOutputTokens,
-              tools: D || [],
+              tools: __cpToolsForProvider,
               system: __cpResolvedSystemPrompt,
               betas: ["oauth-2025-04-20", ...(__cpReasoningEffort !== "none" ? ["effort-2025-11-24"] : [])],
               ...(__cpReasoningEffort !== "none" ? {
@@ -89195,7 +89280,7 @@ function CQ({
             }
             await n();
             const _ = JSON.stringify({
-              toolset: D || [],
+              toolset: __cpToolsForProvider,
               systemPrompt: __cpResolvedSystemPrompt,
               maxTokens: C.max_tokens,
               model: C.model,
@@ -89422,7 +89507,14 @@ function CQ({
             if (s) {
               $(s);
               z(null);
-            } else if ((n.startsWith("overloaded") || n.startsWith("internal server error") || n.startsWith("network error") || n.startsWith("connection error") || n.startsWith("failed to fetch") || n.startsWith("499") || n.startsWith("this request would exceed the rate limit")) && g + 1 < m) {
+            } else if (__cpIsRetryableTransientChatError(n) && g + 1 < m) {
+              __cpPanelDebugLog("chat.retry_transient_error", {
+                attempt: g + 1,
+                maxAttempts: m,
+                message: t,
+                sessionId: s,
+                model: o.current
+              }, "warn");
               g++;
               let e = Math.pow(2, g);
               e += Math.random() * e;
@@ -89496,13 +89588,26 @@ function CQ({
       sessionId: s || "",
       model: o.current
     });
-    if (__cpSendInflightRef.current?.active && __cpSendInflightRef.current.signature === __cpSendSignature) {
-      __cpPanelDebugLog("chat.send_duplicate_blocked", {
+    if (__cpSendInflightRef.current?.active) {
+      const __cpIsDuplicateSend = __cpSendInflightRef.current.signature === __cpSendSignature;
+      __cpPanelDebugLog(__cpIsDuplicateSend ? "chat.send_duplicate_blocked" : "chat.send_busy_blocked", {
         sessionId: s,
         model: o.current,
-        attachmentCount: Array.isArray(t) ? t.length : 0
+        attachmentCount: Array.isArray(t) ? t.length : 0,
+        isLoading: L,
+        isCompacting: D
       }, "warn");
-      return true;
+      return __cpIsDuplicateSend;
+    }
+    if (L || D) {
+      __cpPanelDebugLog(D ? "chat.send_compacting_blocked" : "chat.send_loading_blocked", {
+        sessionId: s,
+        model: o.current,
+        attachmentCount: Array.isArray(t) ? t.length : 0,
+        isLoading: L,
+        isCompacting: D
+      }, "warn");
+      return false;
     }
     __cpSendInflightRef.current = {
       active: true,
@@ -89527,8 +89632,17 @@ function CQ({
         __cpSendInflightRef.current = null;
       }
     }
-  }, [je, s, x, o, z, O, R, P]);
+  }, [je, s, x, o, z, O, R, P, L, D]);
   const Te = a.useCallback(async () => {
+    if (L || D || __cpSendInflightRef.current?.active) {
+      __cpPanelDebugLog("chat.retry_busy_blocked", {
+        sessionId: s,
+        model: o.current,
+        isLoading: L,
+        isCompacting: D
+      }, "warn");
+      return false;
+    }
     const e = [...b];
     for (let t = e.length - 1; t >= 0; t--) {
       if (e[t].role === "assistant") {
@@ -89553,7 +89667,7 @@ function CQ({
       P(false);
       return false;
     }
-  }, [b, je, s, x, o]);
+  }, [b, je, s, x, o, L, D]);
   const Ne = a.useCallback(() => {
     z(null);
   }, []);
@@ -89627,6 +89741,10 @@ function _Q(e) {
     }
   }
   return String(e);
+}
+function __cpIsRetryableTransientChatError(e) {
+  const t = String(e || "").toLowerCase();
+  return t.startsWith("overloaded") || t.startsWith("internal server error") || t.startsWith("network error") || t.startsWith("connection error") || t.startsWith("failed to fetch") || t.startsWith("stream error") || t.includes("internal_error") || t.includes("received from peer") || t.startsWith("499") || t.startsWith("this request would exceed the rate limit");
 }
 const MQ = {
   effort: "medium",
@@ -91246,6 +91364,24 @@ function __cpNormalizeProviderFormat(e, t) {
   }
   return "anthropic";
 }
+function __cpNormalizeCustomAnthropicToolsForProvider(e, t, n) {
+  if (!Array.isArray(e) || !n || __cpNormalizeProviderFormat(t?.format, t?.baseUrl) !== "anthropic") {
+    return Array.isArray(e) ? e : [];
+  }
+  let s = false;
+  const r = e.map(e => {
+    if (!e || typeof e != "object" || e.type !== "custom") {
+      return e;
+    }
+    const {
+      type: __cpIgnoredCustomToolType,
+      ...t
+    } = e;
+    s = true;
+    return t;
+  });
+  return s ? r : e;
+}
 function __cpNormalizeAnthropicClientBaseUrl(e, t) {
   let n = String(t || "").trim().replace(/\/+$/, "");
   if (!n || __cpNormalizeProviderFormat(e, n) !== "anthropic") {
@@ -91372,7 +91508,7 @@ function __cpAreSidepanelProviderConfigsEqual(e, t) {
   if (!e || !t) {
     return false;
   }
-  return e.baseUrl === t.baseUrl && e.defaultModel === t.defaultModel && e.fastModel === t.fastModel && e.reasoningEffort === t.reasoningEffort && __cpAreProviderModelEntriesEqual(e.fetchedModels, t.fetchedModels);
+  return e.baseUrl === t.baseUrl && e.defaultModel === t.defaultModel && e.fastModel === t.fastModel && e.reasoningEffort === t.reasoningEffort && e.maxOutputTokens === t.maxOutputTokens && e.contextWindow === t.contextWindow && __cpAreProviderModelEntriesEqual(e.fetchedModels, t.fetchedModels);
 }
 function __cpBuildCustomProviderModelConfig(e, t) {
   if (!t.baseUrl || !t.defaultModel) {
@@ -91402,7 +91538,9 @@ function __cpBuildCustomProviderModelConfig(e, t) {
     default_model_override_id: null,
     options: n.length > 0 ? n : e.options || [],
     quick_mode: undefined,
-    small_fast_model: r || s || undefined
+    small_fast_model: r || s || undefined,
+    maxOutputTokens: t.maxOutputTokens,
+    contextWindow: t.contextWindow
   };
 }
 // 模型选择与粘性模型读取都从这里汇总，sidepanel 首屏会依赖这个 hook 决定可用模型。
@@ -96665,11 +96803,11 @@ function o1() {
     }
   }, [ce, wt, xt]);
   a.useEffect(() => {
-    if (r.pendingContinue && !xt) {
+    if (r.pendingContinue && !xt && !kt) {
       u.setPendingContinue(false);
       pt("continue", undefined, undefined, true);
     }
-  }, [r.pendingContinue, xt, pt, u]);
+  }, [r.pendingContinue, xt, kt, pt, u]);
   const Kt = a.useMemo(() => {
     if (jt?.reason === "refusal" && !!$.modelFallbacks?.[D]) {
       return null;
@@ -96703,7 +96841,7 @@ function o1() {
     const e = Ze.some(e => !e.error);
     const t = await __cpReadCurrentProviderConfig();
     const n = __cpIsCustomProviderPrivacyMode(t);
-    if ((o.inputText.trim() || e) && !xt && (W || Z || n)) {
+    if ((o.inputText.trim() || e) && !xt && !kt && (W || Z || n)) {
       const s = o.inputText;
       let e = o.inputText.trim();
       if (e.startsWith("/")) {
@@ -96755,7 +96893,7 @@ function o1() {
         o.setInputText(s);
       }
     }
-  }, [Ze, xt, W, Z, He, ne, Qe, pt, o]);
+  }, [Ze, xt, kt, W, Z, He, ne, Qe, pt, o]);
   // 语义锚点：权限弹窗“允许”处理器。
   const nn = a.useCallback(async (e, t) => {
     if (!i.permissionPrompt || !Ee.current) {
@@ -97778,7 +97916,8 @@ function o1() {
     clearAttachments: d,
     anthropicApiKey: h,
     authToken: p,
-    hasBrowserControlPermission: m
+    hasBrowserControlPermission: m,
+    isCompacting: __cpIsCompacting
   }) {
     a.useEffect(() => {
       // 语义锚点：sidepanel <-> service worker / runtime.onMessage 消息协议（ping/主副 tab ack/执行/填充/停止）。
@@ -97825,7 +97964,7 @@ function o1() {
           if (t && e && e !== t) {
             return false;
           }
-          if (n) {
+          if (n || __cpIsCompacting) {
             s();
           }
           r();
@@ -97857,7 +97996,7 @@ function o1() {
           }
           // 语义锚点：scheduled task 只是给 prompt 加任务名前缀；真正发送仍复用普通 sendMessage 主链。
           const c = a.isScheduledTask && a.taskName ? `[Scheduled Task: ${a.taskName}]\n${a.prompt}` : a.prompt;
-          if (!n && (h || p) && c.trim()) {
+          if (!n && !__cpIsCompacting && (h || p) && c.trim()) {
             i.setInputText("");
             l(c);
           }
@@ -97916,7 +98055,7 @@ function o1() {
           }
           setTimeout(() => {
             // 语义锚点：带附件的 populate 走“先注入草稿/附件，再延迟触发发送”，避免 UI 状态还没准备好就开跑。
-            if (!n && (h || p) && e.trim() && m) {
+            if (!n && !__cpIsCompacting && (h || p) && e.trim() && m) {
               i.setInputText("");
               i.setPendingPrompt(null);
               d();
@@ -97935,7 +98074,7 @@ function o1() {
       return () => {
         chrome.runtime.onMessage.removeListener(a);
       };
-    }, [i, e, t, n, s, r, h, p, l, o, c, u, d, m]);
+    }, [i, e, t, n, s, r, h, p, l, o, c, u, d, m, __cpIsCompacting]);
   })({
     tabId: ce,
     isSecondaryTab: Se,
@@ -97950,7 +98089,8 @@ function o1() {
     clearAttachments: Qe,
     anthropicApiKey: Z,
     authToken: W,
-    hasBrowserControlPermission: Ce
+    hasBrowserControlPermission: Ce,
+    isCompacting: kt
   });
   const an = a.useCallback(() => {
     const t = __cpActiveScopeRef.current;
@@ -98337,6 +98477,7 @@ function o1() {
               shouldDisableSkipPermissions: we,
               messages: dt,
               isAgentRunning: xt,
+              isCompacting: kt,
               recordingState: Lt,
               isSpeechRecording: Ft,
               isSpeechSupported: Vt,

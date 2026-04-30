@@ -519,6 +519,7 @@
   "bk8tuJl/tJ": "選擇舉報原因",
   "bmDayxG7DJ": "網站中隱藏的惡意代碼可能會覆蓋你的指令，以竊取數據、向系統注入惡意軟件，或接管你的系統去攻擊其他用戶。{learnMoreLink}",
   "c0/oTKLaf+": "跳過權限確認",
+  "cpContextUsageLabel": "上下文佔用：{percent}%（{total} / {window}）",
   "c0ZeCgLvCL": "對話摘要",
   "c5+JRMBv/Y": "升級套餐",
   "cELBBLzSZE": "Claw 想要 {toolAction}：",
